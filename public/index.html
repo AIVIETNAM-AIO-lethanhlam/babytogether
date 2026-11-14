@@ -2,33 +2,72 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BabyTogether – Cùng nhau nuôi dạy con</title>
-<meta name="description" content="Website đồng hành cùng ba mẹ: kiến thức y khoa đáng tin cậy, hành trình làm cha mẹ, quiz và nhiệm vụ gia đình.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BabyTogether – Cẩm nang chăm sóc trẻ sơ sinh cho ba mẹ</title>
+<meta name="description" content="Kiến thức y khoa đáng tin cậy từ WHO, UNICEF, Bộ Y tế; lộ trình đọc theo tuổi của bé, quiz và nhiệm vụ cho cả gia đình.">
+<meta name="theme-color" content="#0076A5">
 <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Montserrat:wght@400;500;600&display=swap&subset=vietnamese" rel="stylesheet">
-<link rel="stylesheet" href="/assets/css/style.css">
-<script src="/assets/js/common.js" defer></script>
-<script src="/assets/js/home.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css?v=2">
+<script src="/assets/js/common.js?v=2" defer></script>
+<script src="/assets/js/home.js?v=2" defer></script>
 </head>
 <body data-page="home">
 <header class="site-header"></header>
 <main>
-<div class="container">
-  <section class="hero">
-    <h1 class="h1 h1-hero">Learn Together<br>Play Together<br>Grow Together</h1>
-    <div class="divider"><span></span></div>
-    <p class="lead">Cùng nhau học hỏi, chăm sóc con và tận hưởng hành trình làm cha mẹ!</p>
-    <a class="btn" id="start-btn" href="/hanh-trinh">Bắt đầu ngay <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-    <div class="hero-image" role="img" aria-label="Gia đình cùng bé"></div>
-  </section>
-
-  <section class="home-cards" id="home-cards">
-    <div class="loading">Đang tải…</div>
-  </section>
-</div>
+<section class="hero">
+  <div class="container in">
+    <div class="hero-copy">
+      <span class="pill" id="hero-pill">✦ Cẩm nang chăm sóc trẻ sơ sinh cho ba mẹ Việt</span>
+      <h1 class="display">Chăm con dễ hơn khi ba mẹ cùng nhau học</h1>
+      <p class="lead">Kiến thức y khoa đáng tin cậy từ WHO, UNICEF và Bộ Y tế – được trình bày ngắn gọn, dễ làm theo, đúng với từng giai đoạn của bé.</p>
+      <form class="search-bar" action="/kien-thuc" role="search">
+        <span style="color:var(--sky-700);display:inline-flex" data-ic="search" data-size="22"></span>
+        <input name="q" placeholder="Ba mẹ đang thắc mắc điều gì? VD: bé bú bao nhiêu là đủ" aria-label="Tìm kiến thức">
+        <button class="btn">Tìm kiếm</button>
+      </form>
+      <div class="chips"><span class="small muted" style="font-weight:500">Phổ biến:</span>
+        <a class="chip" href="/kien-thuc?q=b%C3%BA">Bé bú đủ sữa</a><a class="chip" href="/kien-thuc?q=r%E1%BB%91n">Chăm sóc rốn</a><a class="chip" href="/kien-thuc?category=vaccination">Lịch tiêm chủng</a><a class="chip" href="/kien-thuc?q=%C4%83n%20d%E1%BA%B7m">Ăn dặm</a>
+      </div>
+    </div>
+    <div class="hero-visual" id="hero-visual" aria-hidden="true"></div>
+  </div>
+</section>
+<section class="trust"><div class="in" style="max-width:1280px;margin:0 auto">
+  <div class="src">Nội dung tham khảo từ <span class="b" data-ic="shield">WHO</span><span class="b" data-ic="shield">UNICEF</span><span class="b" data-ic="shield">Bộ Y tế</span></div>
+  <div class="stats" id="trust-stats"></div>
+</div></section>
+<div id="continue-wrap"></div>
+<section class="section"><div class="container">
+  <div class="section-head"><div class="t"><span class="label">Hành trình làm cha mẹ</span><h2 class="h2">Bé nhà bạn đang ở giai đoạn nào?</h2><p class="lead" style="font-size:17px">Chọn giai đoạn để xem kiến thức, cột mốc phát triển và checklist phù hợp.</p></div><a class="link" href="/hanh-trinh">Nhập ngày sinh của bé <span data-ic="arrow"></span></a></div>
+  <div class="grid-4" id="stages"></div>
+</div></section>
+<section class="section tint"><div class="container">
+  <div class="section-head"><div class="t"><span class="label">Thư viện kiến thức</span><h2 class="h2">Khám phá theo chủ đề</h2></div><a class="link" href="/kien-thuc">Vào thư viện <span data-ic="arrow"></span></a></div>
+  <div class="grid-4" id="topics"></div>
+</div></section>
+<section class="section"><div class="container">
+  <div class="section-head"><div class="t"><span class="label">Đọc nhiều nhất</span><h2 class="h2">Bài viết nổi bật</h2></div><a class="link" href="/kien-thuc">Xem tất cả bài viết <span data-ic="arrow"></span></a></div>
+  <div class="grid-3" id="featured"><div class="loading">Đang tải…</div></div>
+</div></section>
+<section style="padding:8px 0 24px"><div class="container">
+  <div class="danger-band">
+    <div style="display:flex;flex-direction:column;gap:18px;align-items:flex-start">
+      <span class="tag" style="background:var(--sky-900);color:var(--sky-300)" id="danger-tag">AN TOÀN CHO BÉ</span>
+      <h2 class="h2">Khi nào cần đưa bé đi khám ngay?</h2>
+      <p style="margin:0;color:var(--sky-200)">Trẻ sơ sinh có thể chuyển bệnh rất nhanh. Nếu thấy một trong các dấu hiệu bên cạnh, hãy đưa bé đến cơ sở y tế – đừng chờ “theo dõi thêm”.</p>
+      <a class="btn btn-secondary" href="/bai-viet/dau-hieu-nguy-hiem-tre-so-sinh">Xem hướng dẫn đầy đủ <span data-ic="arrow"></span></a>
+    </div>
+    <div class="signs" id="signs"></div>
+  </div>
+</div></section>
+<section class="section"><div class="container">
+  <div class="section-head"><div class="t"><span class="label">Chơi & Học</span><h2 class="h2">Học mà vui, bố mẹ cùng ghi điểm</h2></div></div>
+  <div class="grid-2" id="play"></div>
+</div></section>
+<section style="padding:0 0 96px"><div class="container"><div id="family-cta"></div></div></section>
 </main>
 <footer class="site-footer"></footer>
 </body>

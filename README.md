@@ -17,7 +17,8 @@ babytogether/
 ├── public/              # Giao diện
 │   ├── index.html, kien-thuc.html, bai-viet.html, hanh-trinh.html,
 │   │   choi-hoc.html, nhiem-vu.html, gia-dinh.html, tai-khoan.html
-│   ├── admin/index.html # Trang quản trị (viết bài, quiz, nhiệm vụ, người dùng)
+│   ├── admin/login.html # Đăng nhập quản trị
+│   ├── admin/index.html # Trang quản trị (bài viết, trình soạn thảo, quiz/game, lộ trình, nhiệm vụ, người dùng)
 │   └── assets/ (css, js, img)
 ├── render.yaml          # Cấu hình Render (tùy chọn)
 └── .env.example         # Mẫu biến môi trường
@@ -78,12 +79,18 @@ git push -u origin main
 
 Mỗi lần `git push` lên nhánh `main`, Render sẽ tự triển khai lại.
 
-## Bước 4 – Viết bài trên trang quản trị
+## Bước 4 – Trang quản trị
 
-- Truy cập `https://<tên-web>.onrender.com/admin`, đăng nhập bằng `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
-- **Viết bài mới**: tiêu đề, tóm tắt, nội dung (có thanh công cụ: tiêu đề H2/H3, in đậm, danh sách, trích dẫn, liên kết, chèn ảnh, chế độ sửa HTML; dán từ Word/Google Docs sẽ tự làm sạch định dạng), danh mục, độ tuổi, ảnh bìa, **nguồn tham khảo, đường dẫn tài liệu gốc, người thẩm định**, trạng thái Nháp/Xuất bản, đánh dấu Nổi bật.
-- Quản lý **câu hỏi quiz** (4 đáp án, đáp án đúng, giải thích, nguồn) và **nhiệm vụ** (người tham gia, mục tiêu, điểm thưởng, ảnh).
-- Mục **Người dùng**: cấp/thu hồi quyền quản trị cho tài khoản khác.
+- Đăng nhập tại `https://<tên-web>.onrender.com/admin/login` (chân trang có link “Dành cho quản trị viên”) bằng `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Sau khi đăng nhập, menu “Quản trị” cũng hiện trên trang người dùng.
+- **Quản lý bài viết** (`/admin#articles`): thống kê, tìm kiếm, lọc theo thời gian / mục / trạng thái / lộ trình, tab Có quiz. Bấm **Chỉnh sửa** để hiện nút **Sửa / Xóa** trên mỗi bài.
+- **Viết bài** (`/admin#editor`) kiểu Notion: kiểu khối, font chữ, cỡ chữ, đậm/nghiêng/gạch, màu chữ & màu nền, liên kết, danh sách, căn lề, chèn ảnh (tải lên hoặc link), video (YouTube/Vimeo/.mp4), ô lưu ý, đường kẻ, menu “/”, sửa mã HTML, tự lưu tạm trên máy. Nút **Lưu bản nháp** (người dùng không thấy) / **Đăng bài**; khi sửa bài đã đăng là **Cập nhật**. Đăng/cập nhật → trang xác nhận.
+- **Tạo quiz** từ bài viết (không bắt buộc) hoặc ở mục Quiz & game: thêm câu hỏi, mỗi câu 2–6 đáp án, chọn đáp án đúng, giải thích, nguồn; thời gian & điểm mỗi câu → **Tạo game** → trang xác nhận bài viết + game.
+- **Lộ trình đọc**: tạo lộ trình, sắp xếp thứ tự bài. Người dùng thấy “Bước X/Y”, “nên đọc trước”, “Bài trước / Bài tiếp theo”.
+- **Nhiệm vụ** và **Người dùng** (cấp/thu hồi quyền quản trị).
+
+## Cập nhật phiên bản mới (đã deploy trước đó)
+
+Chỉ cần thay toàn bộ file trên GitHub bằng bản mới và để Render tự deploy lại. **Không cần làm gì trên Cloudflare**: khi khởi động, server tự tạo các bảng mới (`paths`, `path_items`, `quizzes`), tự thêm cột cho `quiz_questions`, tạo 5 lộ trình mẫu và gom các câu quiz cũ vào game “Thử thách kiến thức tổng hợp”. Dữ liệu cũ (bài viết, tài khoản, điểm) được giữ nguyên.
 
 ## Chạy thử trên máy (không bắt buộc)
 
@@ -111,7 +118,7 @@ Mở http://localhost:3000. Khi **không** có biến `CF_*`, server dùng SQLit
 
 ## Lưu ý quan trọng
 
-- **Nội dung mẫu**: 11 bài viết và 10 câu quiz mẫu được tổng hợp từ khuyến nghị chung của WHO/UNICEF/Bộ Y tế; trường "Thẩm định" ghi *“Ban biên tập BabyTogether”* (có thể sửa trong trang Admin).
+- **Nội dung mẫu**: 11 bài viết và 10 câu quiz mẫu được tổng hợp từ khuyến nghị chung của WHO/UNICEF/Bộ Y tế, người thẩm định ghi “Ban biên tập BabyTogether”.
 - **Ảnh** (ảnh bìa, ảnh trong bài, ảnh minh chứng, kỷ niệm) được nén trên trình duyệt (~100–300KB) và lưu trực tiếp trong D1. Phù hợp quy mô nhỏ–vừa; nếu sau này nhiều ảnh, có thể chuyển sang Cloudflare R2.
 - **Render gói Free** sẽ “ngủ” sau ~15 phút không có truy cập, lần mở đầu tiên sau đó mất khoảng 30–60 giây.
 - Ảnh banner trang chủ là hình minh họa `public/assets/img/hero.svg`. Muốn dùng ảnh thật: thêm `hero.jpg` vào thư mục đó và sửa `hero.svg` → `hero.jpg` trong `public/assets/css/style.css` (dòng `.hero-image`).

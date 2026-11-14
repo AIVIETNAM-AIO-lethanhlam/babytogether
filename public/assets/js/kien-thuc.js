@@ -1,138 +1,127 @@
-// Thư viện kiến thức: tìm kiếm, lọc danh mục/độ tuổi, lưu bài, tiến độ đọc
+// Thư viện kiến thức: lộ trình đọc, tìm kiếm, lọc, sắp xếp "Đề xuất", lưu bài, tiến độ đọc
 document.addEventListener('DOMContentLoaded', async () => {
-  const { api, getMe, esc, ph, ICONS, CATEGORIES, AGES, CAT_ICON, toast } = BT;
-  const params = new URLSearchParams(location.search);
-  const state = {
-    q: params.get('q') || '',
-    category: params.get('category') || '',
-    age: params.get('age') || '',
-    bookmarked: params.get('saved') === '1',
-    offset: 0,
-  };
-  const PAGE = 9;
+  const { api, getMe, esc, icon, articleCard, cover, CATEGORIES, AGES, CAT_ICON, CAT_SHORT, localRead, toast } = BT;
   const $ = (id) => document.getElementById(id);
-  $('q').value = state.q;
+  const ps = new URLSearchParams(location.search);
   const me = await getMe();
+  const child = (me.children || [])[0];
+  let childStage = '';
+  if (child) {
+    if (child.birth_date) { const m = (Date.now() - new Date(child.birth_date)) / (30.44 * 864e5); childStage = m < 6 ? '0-6' : m < 12 ? '6-12' : '12-24'; }
+    else childStage = 'pregnancy';
+  }
+  const state = { q: ps.get('q') || '', category: ps.get('category') || '', age: ps.get('age') || '', sources: [], bookmarked: ps.get('saved') === '1', sort: ps.get('sort') || 'recommended', offset: 0 };
+  const PAGE = 9;
+  $('q').value = state.q; $('sort').value = state.sort;
+  const stats = await api('/api/stats').catch(() => ({ categories: {}, articles: 0 }));
 
-  // Danh mục
-  const catKeys = Object.keys(CATEGORIES);
   function renderCats() {
-    $('cats').innerHTML = catKeys.map((k, i) => `
-      <button type="button" class="cat-card ${state.category === k ? 'active' : ''}" data-cat="${k}" aria-pressed="${state.category === k}">
-        <span class="num">0${i + 1}</span><span class="name">${CATEGORIES[k]}</span>
-      </button>`).join('');
+    const total = Object.values(stats.categories).reduce((a, b) => a + b, 0);
+    $('cats').innerHTML = `<button class="chip ${!state.category ? 'active' : ''}" data-cat="">Tất cả · ${total}</button>` +
+      Object.entries(CATEGORIES).map(([k, v]) => `<button class="chip ${state.category === k ? 'active' : ''}" data-cat="${k}">${v} · ${stats.categories[k] || 0}</button>`).join('');
   }
-  $('cats').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-cat]'); if (!b) return;
-    state.category = state.category === b.dataset.cat ? '' : b.dataset.cat;
-    reload();
-  });
+  $('cats').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; state.category = b.dataset.cat; reload(); });
 
-  // Độ tuổi
-  const ageKeys = ['', 'pregnancy', '0-6', '6-12', '12-24'];
-  function renderAges() {
-    $('age-chips').innerHTML = ageKeys.map((k) =>
-      `<button type="button" class="chip ${state.age === k ? 'active' : ''}" data-age="${k}">${k ? AGES[k] : 'Mọi độ tuổi'}</button>`).join('');
-    $('only-bookmarks').classList.toggle('active', state.bookmarked);
+  // ----- Lộ trình -----
+  async function renderPaths() {
+    const age = state.age || childStage || '0-6';
+    const [r1, all] = await Promise.all([api('/api/paths?age=' + age).catch(() => ({ items: [] })), api('/api/paths').catch(() => ({ items: [] }))]);
+    const r = { items: [...r1.items, ...all.items.filter((p) => !r1.items.some((x) => x.id === p.id))] };
+    const local = localRead.get();
+    const items = r.items.slice(0, 3).map((p) => {
+      const arts = p.articles.map((a) => ({ ...a, is_read: a.is_read || local.includes(a.id) }));
+      return { ...p, articles: arts, done: arts.filter((a) => a.is_read).length };
+    });
+    if (!items.length) { $('paths-wrap').innerHTML = ''; return; }
+    const activeIdx = items.findIndex((p) => p.done > 0 && p.done < p.total);
+    $('paths-wrap').innerHTML = `<div class="section-head" style="margin-bottom:28px"><div class="t"><span class="label">Lộ trình đọc</span>
+      <h2 class="h2">Lộ trình gợi ý ${AGES[age] && age !== 'all' ? 'cho ' + (age === 'pregnancy' ? 'mẹ bầu' : 'bé ' + AGES[age]) : ''}</h2>
+      <p class="muted" style="margin:0">Đọc theo thứ tự để nắm kiến thức từ cơ bản đến nâng cao – an toàn trước, chăm sóc hằng ngày sau.</p></div></div>
+      <div class="grid-3">${items.map((p, i) => {
+        const on = i === activeIdx; const next = p.articles.find((a) => !a.is_read) || p.articles[0];
+        const pct = Math.round(p.done / p.total * 100);
+        return `<div class="path-card ${on ? 'active' : ''}">
+          <div class="top"><span class="ib">${icon(p.icon || 'baby', 24)}</span><span class="tag ${on ? '' : ''}" style="${on ? 'background:var(--sky-500);color:#fff' : ''}">${on ? 'Đang đọc' : p.done === p.total ? 'Đã hoàn thành' : esc(AGES[p.age_group] || 'Lộ trình')}</span></div>
+          <h3 class="h3">${esc(p.title)}</h3>
+          <span class="small muted" style="display:flex;gap:6px;align-items:center">${icon('clock', 14)} ${p.total} bài · khoảng ${p.total * 3} phút</span>
+          <div class="segs">${p.articles.map((a) => `<i class="${a.is_read ? 'on' : ''}"></i>`).join('')}</div>
+          <div class="row"><span>Đã đọc ${p.done}/${p.total} bài</span><span>${pct}%</span></div>
+          <a class="next" href="/bai-viet/${encodeURIComponent(next.slug)}"><div><span class="label">${p.done ? (p.done === p.total ? 'ĐỌC LẠI · BƯỚC 1' : 'TIẾP THEO · BƯỚC ' + next.position) : 'BẮT ĐẦU · BƯỚC 1'}</span><b class="clamp-2" style="display:-webkit-box">${esc(next.title)}</b></div>${icon('arrow', 18)}</a>
+          <div class="foot"><a class="btn ${on ? 'btn-secondary' : 'btn-ghost'}" href="/bai-viet/${encodeURIComponent(next.slug)}">${p.done && p.done < p.total ? 'Đọc tiếp' : p.done === p.total ? 'Đọc lại' : 'Bắt đầu lộ trình'} ${icon('arrow', 18)}</a></div>
+        </div>`;
+      }).join('')}</div>`;
   }
-  $('age-chips').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-age]'); if (!b) return;
-    state.age = b.dataset.age; reload();
-  });
-  $('only-bookmarks').addEventListener('click', () => {
-    if (!me.user) { toast('Vui lòng đăng nhập để xem bài đã lưu.'); return; }
-    state.bookmarked = !state.bookmarked; reload();
-  });
-  $('search-form').addEventListener('submit', (e) => { e.preventDefault(); state.q = $('q').value.trim(); reload(); });
+
+  // ----- Sidebar -----
+  async function renderSide() {
+    const ages = [['', 'Mọi độ tuổi'], ['pregnancy', 'Mang thai'], ['0-6', '0 – 6 tháng'], ['6-12', '6 – 12 tháng'], ['12-24', '12 – 24 tháng']];
+    let read = null;
+    if (me.user) read = await api('/api/reading').catch(() => null);
+    const localCount = localRead.get().length;
+    const done = read ? read.items.length : localCount, total = read ? read.total : stats.articles;
+    $('side').innerHTML = `
+      <div class="filter-box"><h3>Độ tuổi của bé</h3>${ages.map(([k, l]) => `<label class="filter-opt"><input type="radio" name="age" value="${k}" ${state.age === k ? 'checked' : ''}> ${l}${k && k === childStage ? ' <span class="tag" style="margin-left:auto">Bé nhà bạn</span>' : ''}</label>`).join('')}</div>
+      <div class="filter-box"><h3>Nguồn tham khảo</h3>${['WHO', 'UNICEF', 'Bộ Y tế'].map((s) => `<label class="filter-opt"><input type="checkbox" name="src" value="${s}" ${state.sources.includes(s) ? 'checked' : ''}> ${s}</label>`).join('')}</div>
+      <div class="read-card"><span class="label" style="color:var(--sky-300)">Tiến độ đọc của bạn</span>
+        <div style="display:flex;align-items:baseline;gap:6px"><span class="h1">${done}</span><span style="color:var(--sky-200)">/ ${total} bài</span></div>
+        <div class="progress"><i style="width:${total ? Math.round(done / total * 100) : 0}%"></i></div>
+        <button type="button" class="link" id="saved-btn" style="background:none;border:0;padding:0;color:#fff;justify-content:flex-start">${icon('bookmark', 16)} ${state.bookmarked ? 'Đang xem bài đã lưu – bỏ lọc' : `${read ? read.saved : 0} bài đã lưu`}</button>
+        ${me.user ? '' : '<span class="small" style="color:var(--sky-200)">Đăng nhập để đồng bộ tiến độ giữa các thiết bị.</span>'}
+      </div>`;
+    $('side').querySelectorAll('input[name=age]').forEach((i) => i.addEventListener('change', () => { state.age = i.value; reload(true); }));
+    $('side').querySelectorAll('input[name=src]').forEach((i) => i.addEventListener('change', () => { state.sources = [...$('side').querySelectorAll('input[name=src]:checked')].map((x) => x.value); reload(); }));
+    $('saved-btn').addEventListener('click', () => { if (!me.user) { toast('Vui lòng đăng nhập để xem bài đã lưu.'); return; } state.bookmarked = !state.bookmarked; reload(); });
+  }
 
   function query(extra) {
     const p = new URLSearchParams();
-    if (state.q) p.set('q', state.q);
-    if (state.category) p.set('category', state.category);
-    if (state.age) p.set('age', state.age);
-    if (state.bookmarked) p.set('bookmarked', '1');
-    Object.entries(extra || {}).forEach(([k, v]) => p.set(k, v));
-    return p.toString();
-  }
-
-  function card(a) {
-    return `<article class="post-card">
-      ${ph(a.cover_image, CAT_ICON[a.category], a.cover_image ? a.title : CATEGORIES[a.category])}
-      <button type="button" class="bookmark-btn ${a.bookmarked ? 'on' : ''}" data-bm="${a.id}" aria-label="${a.bookmarked ? 'Bỏ lưu' : 'Lưu bài viết'}" title="${a.bookmarked ? 'Bỏ lưu' : 'Lưu bài viết'}">${ICONS.bookmark}</button>
-      <div class="tags"><span class="tag">${esc(AGES[a.age_group] || '')}</span>${a.is_read ? '<span class="tag read">Đã đọc</span>' : ''}</div>
-      <h3 class="h3"><a href="/bai-viet/${encodeURIComponent(a.slug)}">${esc(a.title)}</a></h3>
-      <p class="summary">${esc(a.summary)}</p>
-      <a class="link-underline" href="/bai-viet/${encodeURIComponent(a.slug)}">Đọc bài viết</a>
-    </article>`;
-  }
-
-  async function loadFeatured() {
-    const box = $('featured');
-    if (state.q || state.bookmarked) { box.innerHTML = ''; return null; }
-    const r = await api('/api/articles?' + query({ featured: '1', limit: 1 }));
-    const a = r.items[0];
-    if (!a) { box.innerHTML = ''; return null; }
-    box.innerHTML = `<div class="featured">
-      ${ph(a.cover_image, CAT_ICON[a.category], a.cover_image ? a.title : 'Bài viết nổi bật')}
-      <div class="info">
-        <div class="eyebrow">${esc(CATEGORIES[a.category])}</div>
-        <h2>${esc(a.title)}</h2>
-        <div class="divider sm"><span></span></div>
-        <p class="body-text">${esc(a.summary)}</p>
-        <div class="meta">${esc(a.source_name || 'BabyTogether')} · Cập nhật: ${BT.fmtDate(a.updated_at)}</div>
-        <a class="btn-light inline" href="/bai-viet/${encodeURIComponent(a.slug)}"><span>Đọc bài viết</span>${ICONS.arrow}</a>
-      </div></div>`;
-    return a.id;
+    if (state.q) p.set('q', state.q); if (state.category) p.set('category', state.category); if (state.age) p.set('age', state.age);
+    if (state.sources.length) p.set('source', state.sources.join(',')); if (state.bookmarked) p.set('bookmarked', '1'); p.set('sort', state.sort);
+    Object.entries(extra || {}).forEach(([k, v]) => p.set(k, v)); return p.toString();
   }
 
   let featuredId = null;
+  async function loadFeatured() {
+    const box = $('featured');
+    if (state.q || state.bookmarked || state.sources.length) { box.innerHTML = ''; return null; }
+    const r = await api('/api/articles?' + query({ featured: '1', limit: 1, sort: 'newest' }));
+    const a = r.items[0];
+    if (!a) { box.innerHTML = ''; return null; }
+    box.innerHTML = `<div class="featured">${cover(a.cover_image, CAT_ICON[a.category], 'deep', 96)}
+      <div class="info"><div class="chips"><span class="tag dark">Nổi bật</span><span class="tag" style="background:#fff">${esc(CAT_SHORT[a.category])}</span>${a.step ? `<span class="tag outline">${icon('route', 13)} ${BT.stepLabel(a.step)}</span>` : ''}</div>
+      <h2 class="h2">${esc(a.title)}</h2><p class="muted" style="margin:0">${esc(a.summary)}</p>
+      <div class="small" style="display:flex;gap:16px;color:var(--sky-800)"><span style="display:inline-flex;gap:6px;align-items:center">${icon('shield', 16)} ${esc(a.source_name || 'BabyTogether')}</span><span style="display:inline-flex;gap:6px;align-items:center">${icon('book', 16)} ${esc(AGES[a.age_group])}</span></div>
+      <a class="btn" style="align-self:flex-start" href="/bai-viet/${encodeURIComponent(a.slug)}">Đọc bài viết ${icon('arrow', 18)}</a></div></div>`;
+    return a.id;
+  }
+
   async function loadList(append) {
     const list = $('list');
-    if (!append) list.innerHTML = '<div class="loading">Đang tải…</div>';
+    if (!append) list.innerHTML = '<div class="loading" style="grid-column:1/-1">Đang tải…</div>';
     try {
       const r = await api('/api/articles?' + query({ limit: PAGE, offset: state.offset }));
       const items = r.items.filter((a) => a.id !== featuredId);
-      const html = items.map(card).join('');
+      const html = items.map((a) => articleCard(a)).join('');
       if (append) list.insertAdjacentHTML('beforeend', html);
-      else list.innerHTML = html || `<div class="empty" style="grid-column:1/-1">${state.bookmarked ? 'Bạn chưa lưu bài viết nào.' : 'Không tìm thấy bài viết phù hợp.'}</div>`;
+      else list.innerHTML = html || `<div class="empty" style="grid-column:1/-1">${state.bookmarked ? 'Bạn chưa lưu bài viết nào.' : 'Không tìm thấy bài viết phù hợp. Thử từ khóa khác nhé!'}</div>`;
       $('more').hidden = !r.hasMore;
-    } catch (e) { list.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+      $('count').textContent = `${r.total} bài viết`;
+      $('count-sub').textContent = [state.q ? `cho “${state.q}”` : '', state.category ? CATEGORIES[state.category] : '', state.age ? AGES[state.age] : ''].filter(Boolean).join(' · ');
+    } catch (e) { list.innerHTML = `<div class="empty" style="grid-column:1/-1">${esc(e.message)}</div>`; }
   }
 
-  async function reload() {
+  async function reload(withPaths) {
     state.offset = 0;
-    renderCats(); renderAges();
-    const title = state.bookmarked ? 'Bài viết đã lưu'
-      : state.q ? `Kết quả cho “${state.q}”`
-      : state.category ? CATEGORIES[state.category] : 'Tất cả bài viết';
-    $('list-title').textContent = title;
-    const p = new URLSearchParams();
-    if (state.q) p.set('q', state.q); if (state.category) p.set('category', state.category); if (state.age) p.set('age', state.age);
+    renderCats();
+    const p = new URLSearchParams(); if (state.q) p.set('q', state.q); if (state.category) p.set('category', state.category); if (state.age) p.set('age', state.age); if (state.sort !== 'recommended') p.set('sort', state.sort);
     history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
+    if (withPaths) renderPaths();
+    renderSide();
     featuredId = await loadFeatured().catch(() => null);
     await loadList(false);
   }
-
+  $('search-form').addEventListener('submit', (e) => { e.preventDefault(); state.q = $('q').value.trim(); reload(); });
+  $('sort').addEventListener('change', () => { state.sort = $('sort').value; reload(); });
   $('more').addEventListener('click', () => { state.offset += PAGE; loadList(true); });
-
-  // Lưu bài viết
-  document.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-bm]'); if (!b) return;
-    if (!me.user) { toast('Vui lòng đăng nhập để lưu bài viết.'); return; }
-    try {
-      const r = await api(`/api/articles/${b.dataset.bm}/bookmark`, { method: 'POST' });
-      b.classList.toggle('on', r.bookmarked);
-      b.setAttribute('aria-label', r.bookmarked ? 'Bỏ lưu' : 'Lưu bài viết');
-      toast(r.bookmarked ? 'Đã lưu bài viết' : 'Đã bỏ lưu');
-    } catch (ex) { toast(ex.message, true); }
-  });
-
-  // Tiến độ đọc
-  if (me.user) {
-    api('/api/reading').then((r) => {
-      $('reading-progress').textContent = `Bạn đã đọc ${r.items.length}/${r.total} bài viết`;
-    }).catch(() => {});
-  }
-
-  reload();
+  reload(true);
 });

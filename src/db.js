@@ -81,6 +81,14 @@ const db = {
       .split('\n').filter((l) => !l.trim().startsWith('--')).join('\n');
     const statements = schema.split(';').map((s) => s.trim()).filter(Boolean);
     for (const s of statements) await query(s, []);
+    // Migration: thêm cột mới cho bảng cũ (bỏ qua nếu đã có)
+    const migrations = [
+      'ALTER TABLE quiz_questions ADD COLUMN quiz_id INTEGER',
+      'ALTER TABLE quiz_questions ADD COLUMN position INTEGER NOT NULL DEFAULT 0',
+    ];
+    for (const m of migrations) {
+      try { await query(m, []); } catch (e) { if (!/duplicate column/i.test(e.message)) console.warn('[migration]', e.message); }
+    }
   },
 };
 

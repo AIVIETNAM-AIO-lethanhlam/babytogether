@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quản trị – BabyTogether</title>
+<meta name="description" content="Khu vực quản trị nội dung BabyTogether">
+<meta name="theme-color" content="#0076A5">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css?v=2">
+<script src="/assets/js/common.js?v=2" defer></script>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="/assets/css/admin.css?v=2">
+<script src="/assets/js/admin-login.js?v=2" defer></script>
+</head>
+<body class="admin" data-page="admin-login">
+<main class="login">
+  <section class="l">
+    <div id="brand"></div>
+    <div class="mid" style="display:flex;flex-direction:column;gap:18px">
+      <h1 class="h1">Khu vực quản trị nội dung</h1>
+      <p class="lead" style="color:var(--sky-200)">Viết bài, quản lý thư viện kiến thức, sắp xếp lộ trình đọc và tạo quiz cho ba mẹ – tất cả ở một nơi.</p>
+      <div id="feats" style="display:flex;flex-direction:column;gap:12px;margin-top:8px"></div>
+    </div>
+    <span class="small" style="color:var(--sky-300)">© 2026 BabyTogether · Chỉ dành cho quản trị viên được cấp quyền</span>
+  </section>
+  <section class="r">
+    <form id="login" novalidate>
+      <span class="ib lg" id="shield"></span>
+      <div><h2 class="h2">Đăng nhập quản trị</h2><p class="muted" style="margin:6px 0 0">Dùng tài khoản được cấp quyền admin.</p></div>
+      <label class="field">Email<input type="email" name="email" required autocomplete="username" placeholder="admin@babytogether.vn"></label>
+      <label class="field">Mật khẩu<span class="pw"><input type="password" name="password" required autocomplete="current-password" style="padding-right:44px"><button type="button" id="toggle-pw" aria-label="Hiện mật khẩu"></button></span></label>
+      <div class="msg error" hidden></div>
+      <button class="btn btn-block" id="submit">Đăng nhập</button>
+      <a class="link small" href="/" style="justify-content:center">← Quay về trang người dùng</a>
+    </form>
+  </section>
+</main>
+</body>
+</html>

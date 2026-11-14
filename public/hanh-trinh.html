@@ -2,93 +2,45 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hành trình làm cha mẹ – BabyTogether</title>
-<meta name="description" content="Nhập ngày sinh của bé hoặc ngày dự sinh để nhận gợi ý kiến thức, cột mốc phát triển và checklist phù hợp.">
+<meta name="description" content="Nhập ngày sinh hoặc ngày dự sinh để nhận gợi ý kiến thức, cột mốc phát triển, checklist và nhắc lịch phù hợp.">
+<meta name="theme-color" content="#0076A5">
 <link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Montserrat:wght@400;500;600&display=swap&subset=vietnamese" rel="stylesheet">
-<link rel="stylesheet" href="/assets/css/style.css">
-<script src="/assets/js/common.js" defer></script>
-<script src="/assets/js/hanh-trinh.js" defer></script>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,600;1,400&family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css?v=2">
+<script src="/assets/js/common.js?v=2" defer></script>
+<script src="/assets/js/hanh-trinh.js?v=2" defer></script>
 </head>
 <body data-page="hanh-trinh">
 <header class="site-header"></header>
 <main>
-<div class="container">
-  <section class="page-head">
-    <h1 class="h1">Hành trình làm cha mẹ</h1>
-    <div class="divider"><span></span></div>
-    <p class="lead">Nhập thông tin của bé để nhận những gợi ý kiến thức phù hợp nhất!</p>
-    <div class="seg" role="tablist" aria-label="Loại thông tin">
-      <button type="button" class="active" data-mode="born">Bé đã chào đời</button>
-      <button type="button" data-mode="pregnant">Đang mang thai</button>
+<section class="page-hero"><div class="container">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:32px;flex-wrap:wrap">
+    <div style="display:flex;flex-direction:column;gap:12px;max-width:620px">
+      <span class="label">Hành trình làm cha mẹ</span>
+      <h1 class="h1">Đồng hành theo từng tháng tuổi của bé</h1>
+      <p class="lead">Nhập ngày sinh hoặc ngày dự sinh – BabyTogether tự gợi ý kiến thức, cột mốc và việc cần chuẩn bị.</p>
     </div>
-    <form class="journey-form" id="journey-form">
-      <label class="field" id="date-label">
-        <span id="date-label-text">Ngày sinh của bé</span>
-        <input type="date" id="date-input" required>
-      </label>
-      <button type="submit" class="btn btn-lg">Bắt đầu <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-    </form>
-    <p class="meta" id="child-note" hidden></p>
-  </section>
-</div>
-
-<div id="journey-result" hidden>
-  <section class="section-tint">
-    <div class="container" style="padding-top:80px;padding-bottom:88px">
-      <div class="stage-hero">
-        <div class="ph" id="stage-image"></div>
-        <div class="info">
-          <div class="eyebrow">Giai đoạn của bé</div>
-          <h2 id="stage-title"></h2>
-          <div class="divider sm"><span></span></div>
-          <p class="lead" id="stage-tagline"></p>
-          <p class="body-text" id="stage-age"></p>
-        </div>
-      </div>
-      <div class="stage-steps" id="stage-steps"></div>
-    </div>
-  </section>
-
-  <section class="container section">
-    <div class="two-col">
-      <div class="stack">
-        <div class="col-head"><h2>Gợi ý cho bạn</h2><div class="divider sm"><span></span></div></div>
-        <div class="link-list" id="suggestions"></div>
-        <a class="btn-light" id="more-suggestions" href="/kien-thuc">Xem thêm <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
-      </div>
-      <div class="stack">
-        <div class="col-head"><h2 id="checklist-title">Checklist của ba mẹ</h2><div class="divider sm"><span></span></div></div>
-        <div class="checklist" id="checklist"></div>
-        <p class="meta" id="checklist-note"></p>
-      </div>
-    </div>
-  </section>
-
-  <section class="section section-tint">
-    <div class="container stack">
-      <div class="col-head"><h2 class="h2">Cột mốc phát triển</h2><div class="divider md"><span></span></div>
-        <p class="meta">Mỗi bé phát triển theo nhịp riêng – các mốc chỉ mang tính tham khảo.</p></div>
-      <div class="milestones" id="milestones"></div>
-    </div>
-  </section>
-
-  <section class="container section">
-    <div class="two-col">
-      <div class="stack">
-        <div class="col-head"><h2>Nhắc lịch sức khỏe</h2><div class="divider sm"><span></span></div></div>
-        <div id="reminders"></div>
-      </div>
-      <div class="stack">
-        <div class="col-head"><h2>Thêm lịch tiêm / khám</h2><div class="divider sm"><span></span></div></div>
-        <div id="reminder-form-wrap"></div>
-      </div>
-    </div>
-  </section>
-</div>
+    <div class="profile-card" id="profile"></div>
+  </div>
+  <div class="timeline" id="timeline"></div>
+</div></section>
+<section style="padding:56px 0 96px"><div class="container journey-layout">
+  <div style="display:flex;flex-direction:column;gap:40px;min-width:0">
+    <div><div class="panel-title"><h2 class="h3">Trọng tâm giai đoạn này</h2><a class="link small" id="focus-link" href="/kien-thuc">Xem kiến thức <span data-ic="arrow"></span></a></div><div class="grid-4" id="focus"></div></div>
+    <div><div class="panel-title"><h2 class="h3">Cột mốc phát triển</h2></div><div class="ms-list" id="milestones"></div>
+      <p class="small muted" style="display:flex;gap:8px;align-items:center;margin:12px 0 0"><span data-ic="bulb"></span>Mỗi bé phát triển theo nhịp riêng – các mốc chỉ mang tính tham khảo. Hãy trao đổi với bác sĩ nếu ba mẹ lo lắng.</p></div>
+    <div><div class="panel-title"><h2 class="h3" id="read-title">Gợi ý đọc cho giai đoạn này</h2><a class="link small" id="read-link" href="/kien-thuc">Vào thư viện <span data-ic="arrow"></span></a></div><div id="suggest"></div></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:24px">
+    <div class="card tint" style="padding:24px"><div class="panel-title" style="margin-bottom:6px"><h2 class="h4">Checklist của ba mẹ</h2><span class="small" style="color:var(--sky-700);font-weight:600" id="cl-count"></span></div>
+      <div class="progress" style="margin:8px 0 6px"><i id="cl-bar" style="width:0"></i></div><div class="checklist" id="checklist"></div><p class="small muted" id="cl-note" style="margin:8px 0 0"></p></div>
+    <div class="card dark" id="nhac-lich" style="padding:24px;display:flex;flex-direction:column;gap:14px"></div>
+  </div>
+</div></section>
 </main>
 <footer class="site-footer"></footer>
 </body>

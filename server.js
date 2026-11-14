@@ -60,15 +60,66 @@ function isImage(v) {
   if (!v) return true;
   return /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v) || /^https?:\/\/[^\s"'<>]+$/.test(v);
 }
-function sanitizeHtml(html) {
-  return String(html || '')
-    .replace(/<\s*(script|style|iframe|object|embed|form|button|textarea|select|noscript|svg|math)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '')
-    .replace(/<\s*\/?\s*(script|style|iframe|object|embed|form|input|button|textarea|select|meta|link|base|noscript|svg|math)\b[^>]*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/(href|src)\s*=\s*("|')\s*(javascript|vbscript|data:(?!image\/))[^"']*\2/gi, '$1="#"')
-    .replace(/(href|src)\s*=\s*(javascript|vbscript|data:(?!image\/))[^\s>]*/gi, '$1="#"')
-    .slice(0, 1_900_000);
+const ALLOWED_TAGS = new Set(['p', 'h2', 'h3', 'h4', 'strong', 'b', 'em', 'i', 'u', 's', 'strike', 'del', 'mark', 'span', 'font',
+  'ul', 'ol', 'li', 'blockquote', 'br', 'hr', 'a', 'img', 'figure', 'figcaption', 'div', 'iframe', 'video', 'source',
+  'table', 'thead', 'tbody', 'tr', 'td', 'th', 'sub', 'sup', 'code', 'pre']);
+const STYLE_PROPS = new Set(['color', 'background-color', 'font-family', 'font-size', 'text-align', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line']);
+const VOID = new Set(['br', 'hr', 'img', 'source']);
+function cleanStyle(v) {
+  return String(v).split(';').map((d) => {
+    const i = d.indexOf(':'); if (i < 0) return '';
+    const k = d.slice(0, i).trim().toLowerCase(); const val = d.slice(i + 1).trim();
+    if (!STYLE_PROPS.has(k)) return '';
+    if (!/^[#(),.%\w\s'"-]+$/.test(val) || /url\s*\(|expression|javascript/i.test(val)) return '';
+    return `${k}: ${val}`;
+  }).filter(Boolean).join('; ');
 }
+const okHref = (v) => /^(https?:\/\/|mailto:|\/|#)/i.test(v);
+const okImg = (v) => /^https?:\/\/[^\s"'<>]+$/i.test(v) || /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(v);
+const okFrame = (v) => /^https:\/\/(www\.)?(youtube\.com|youtube-nocookie\.com)\/embed\/[\w-]+(\?[\w=&;.-]*)?$/i.test(v) || /^https:\/\/player\.vimeo\.com\/video\/\d+(\?[\w=&;.-]*)?$/i.test(v);
+const okVideo = (v) => /^https?:\/\/[^\s"'<>]+$/i.test(v);
+const esc = (v) => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+function sanitizeHtml(input) {
+  let html = String(input || '').slice(0, 1_900_000)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<\s*(script|style|noscript|textarea|select|object|embed|svg|math|template|form|button)\b[\s\S]*?<\s*\/\s*\1\s*>/gi, '');
+  return html.replace(/<\s*(\/?)\s*([a-zA-Z][a-zA-Z0-9]*)([^>]*)>/g, (m, close, tagName, rest) => {
+    const tag = tagName.toLowerCase();
+    if (!ALLOWED_TAGS.has(tag)) return '';
+    if (close) return VOID.has(tag) ? '' : `</${tag}>`;
+    const attrs = {};
+    rest.replace(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*(?:=\s*("([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g, (_, n, __, a, b, c) => {
+      attrs[n.toLowerCase()] = a != null ? a : b != null ? b : c != null ? c : '';
+      return '';
+    });
+    const out = [];
+    if (attrs.style) { const st = cleanStyle(attrs.style); if (st) out.push(`style="${esc(st)}"`); }
+    if (attrs.class && /^[a-z0-9 _-]+$/i.test(attrs.class)) out.push(`class="${esc(attrs.class)}"`);
+    if (tag === 'a') {
+      if (attrs.href && okHref(attrs.href)) out.push(`href="${esc(attrs.href)}"`);
+      if (/^https?:/i.test(attrs.href || '')) out.push('target="_blank" rel="noopener noreferrer"');
+    } else if (tag === 'img') {
+      if (!attrs.src || !okImg(attrs.src)) return '';
+      out.push(`src="${esc(attrs.src)}"`, `alt="${esc(attrs.alt || '')}"`, 'loading="lazy"');
+    } else if (tag === 'iframe') {
+      if (!attrs.src || !okFrame(attrs.src)) return '';
+      out.push(`src="${esc(attrs.src)}"`, 'allowfullscreen', 'loading="lazy"', 'frameborder="0"',
+        'allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"', `title="${esc(attrs.title || 'Video')}"`);
+    } else if (tag === 'video' || tag === 'source') {
+      if (attrs.src) { if (!okVideo(attrs.src)) return ''; out.push(`src="${esc(attrs.src)}"`); }
+      if (tag === 'video') out.push('controls', 'preload="metadata"');
+      if (tag === 'source' && attrs.type && /^video\/[a-z0-9]+$/i.test(attrs.type)) out.push(`type="${attrs.type}"`);
+    } else if (tag === 'font') {
+      if (attrs.color && /^#?[\w]+$/.test(attrs.color)) out.push(`color="${esc(attrs.color)}"`);
+      if (attrs.face && /^[\w\s,'-]+$/.test(attrs.face)) out.push(`face="${esc(attrs.face)}"`);
+    } else if (tag === 'div' && attrs['data-type'] && /^[a-z-]+$/.test(attrs['data-type'])) {
+      out.push(`data-type="${attrs['data-type']}"`);
+    }
+    return `<${tag}${out.length ? ' ' + out.join(' ') : ''}>`;
+  });
+}
+
 
 // Mật khẩu: scrypt
 function hashPassword(pw) {
@@ -323,6 +374,28 @@ const CATEGORIES = ['baby-care', 'maternal-care', 'nutrition', 'vaccination'];
 const AGES = ['pregnancy', '0-6', '6-12', '12-24', 'all'];
 const LIST_COLS = 'a.id,a.slug,a.title,a.summary,a.category,a.age_group,a.cover_image,a.source_name,a.reviewer,a.featured,a.views,a.updated_at,a.created_at';
 
+// Bản đồ: bài viết -> lộ trình đầu tiên chứa nó (để hiện nhãn "Bước 2 · Tuần đầu đời")
+async function pathMap() {
+  const rows = await db.all(`SELECT pi.article_id, pi.position, p.id AS path_id, p.title, p.slug, p.sort_order,
+      (SELECT COUNT(*) FROM path_items x WHERE x.path_id=p.id) AS total
+    FROM path_items pi JOIN paths p ON p.id=pi.path_id ORDER BY p.sort_order, pi.position`);
+  const map = new Map();
+  for (const r of rows) if (!map.has(r.article_id)) map.set(r.article_id, r);
+  return map;
+}
+function stepOf(map, id) {
+  const p = map.get(id);
+  return p ? { path_id: p.path_id, path_title: p.title, path_slug: p.slug, position: p.position, total: Number(p.total) } : null;
+}
+
+route('GET', '/api/stats', async () => {
+  const cats = await db.all("SELECT category, COUNT(*) AS n FROM articles WHERE status='published' GROUP BY category");
+  const t = await db.get(`SELECT (SELECT COUNT(*) FROM articles WHERE status='published') AS articles,
+    (SELECT COUNT(*) FROM families) AS families, (SELECT COUNT(*) FROM paths) AS paths`);
+  const categories = {}; for (const c of cats) categories[c.category] = Number(c.n);
+  return { categories, articles: Number(t.articles), families: Number(t.families), paths: Number(t.paths) };
+});
+
 route('GET', '/api/articles', async (ctx) => {
   const q = ctx.query;
   const where = ["a.status='published'"], params = [];
@@ -333,36 +406,67 @@ route('GET', '/api/articles', async (ctx) => {
   if (CATEGORIES.includes(q.category)) { where.push('a.category=?'); params.push(q.category); }
   if (AGES.includes(q.age) && q.age !== 'all') { where.push("(a.age_group=? OR a.age_group='all')"); params.push(q.age); }
   if (q.featured === '1') where.push('a.featured=1');
+  if (q.source) {
+    const srcs = String(q.source).split(',').map((s) => str(s, 40)).filter(Boolean).slice(0, 5);
+    if (srcs.length) { where.push('(' + srcs.map(() => 'a.source_name LIKE ?').join(' OR ') + ')'); srcs.forEach((s) => params.push(`%${s}%`)); }
+  }
   const limit = Math.min(Number(q.limit) || 12, 50);
   const offset = Math.max(Number(q.offset) || 0, 0);
   const uid = ctx.user ? ctx.user.id : 0;
-  if (q.bookmarked === '1' && uid) { where.push('b.user_id IS NOT NULL'); }
-  const sql = `SELECT ${LIST_COLS},
+  if (q.bookmarked === '1' && uid) where.push('b.user_id IS NOT NULL');
+  const rows = await db.all(`SELECT ${LIST_COLS},
       CASE WHEN b.user_id IS NULL THEN 0 ELSE 1 END AS bookmarked,
       CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
     FROM articles a
     LEFT JOIN bookmarks b ON b.article_id=a.id AND b.user_id=?
     LEFT JOIN article_reads r ON r.article_id=a.id AND r.user_id=?
     WHERE ${where.join(' AND ')}
-    ORDER BY a.featured DESC, a.updated_at DESC LIMIT ? OFFSET ?`;
-  const items = await db.all(sql, [uid, uid, ...params, limit + 1, offset]);
-  return { items: items.slice(0, limit), hasMore: items.length > limit };
+    ORDER BY a.updated_at DESC LIMIT 500`, [uid, uid, ...params]);
+  const map = await pathMap();
+  for (const r of rows) r.step = stepOf(map, r.id);
+  const sort = q.sort || 'recommended';
+  if (sort === 'recommended') {
+    rows.sort((x, y) => {
+      const a = map.get(x.id), b = map.get(y.id);
+      if (a && b) return a.sort_order - b.sort_order || a.position - b.position;
+      if (a) return -1; if (b) return 1;
+      return y.featured - x.featured || String(y.updated_at).localeCompare(String(x.updated_at));
+    });
+  } else if (sort === 'popular') rows.sort((x, y) => y.views - x.views);
+  return { items: rows.slice(offset, offset + limit), total: rows.length, hasMore: rows.length > offset + limit };
 });
 
 route('GET', '/api/articles/:slug', async (ctx) => {
   const uid = ctx.user ? ctx.user.id : 0;
+  const isAdmin = ctx.user && ctx.user.role === 'admin' ? 1 : 0;
   const a = await db.get(`SELECT a.*, CASE WHEN b.user_id IS NULL THEN 0 ELSE 1 END AS bookmarked,
       CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
     FROM articles a
     LEFT JOIN bookmarks b ON b.article_id=a.id AND b.user_id=?
     LEFT JOIN article_reads r ON r.article_id=a.id AND r.user_id=?
-    WHERE a.slug=? AND (a.status='published' OR ?=1)`, [uid, uid, ctx.params.slug, ctx.user && ctx.user.role === 'admin' ? 1 : 0]);
+    WHERE a.slug=? AND (a.status='published' OR ?=1)`, [uid, uid, ctx.params.slug, isAdmin]);
   if (!a) throw new HttpError(404, 'Không tìm thấy bài viết.');
   db.run('UPDATE articles SET views=views+1 WHERE id=?', [a.id]).catch(() => {});
-  const related = await db.all(`SELECT a.id,a.slug,a.title,a.summary,a.category,a.cover_image FROM articles a
+  const related = await db.all(`SELECT a.id,a.slug,a.title,a.summary,a.category,a.age_group,a.cover_image,a.source_name FROM articles a
     WHERE a.status='published' AND a.id<>? AND (a.category=? OR a.age_group=?)
     ORDER BY (a.category=?) DESC, a.updated_at DESC LIMIT 3`, [a.id, a.category, a.age_group, a.category]);
-  return { article: a, related };
+  // Lộ trình chứa bài viết
+  let path = null;
+  const pi = await db.get(`SELECT p.* FROM path_items pi JOIN paths p ON p.id=pi.path_id WHERE pi.article_id=?
+    ORDER BY p.sort_order LIMIT 1`, [a.id]);
+  if (pi) {
+    const items = await db.all(`SELECT a.id,a.slug,a.title,pi.position,
+        CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
+      FROM path_items pi JOIN articles a ON a.id=pi.article_id
+      LEFT JOIN article_reads r ON r.article_id=a.id AND r.user_id=?
+      WHERE pi.path_id=? AND (a.status='published' OR ?=1) ORDER BY pi.position`, [uid, pi.id, isAdmin]);
+    const idx = items.findIndex((x) => x.id === a.id);
+    path = { id: pi.id, slug: pi.slug, title: pi.title, items, index: idx, total: items.length,
+      prev: idx > 0 ? items[idx - 1] : null, next: idx >= 0 && idx < items.length - 1 ? items[idx + 1] : null };
+  }
+  const quiz = await db.get(`SELECT q.id,q.title,q.points_per_question,(SELECT COUNT(*) FROM quiz_questions x WHERE x.quiz_id=q.id AND x.active=1) AS questions
+    FROM quizzes q WHERE q.article_id=? AND q.status='published' ORDER BY q.id DESC LIMIT 1`, [a.id]);
+  return { article: a, related, path, quiz: quiz && Number(quiz.questions) ? quiz : null };
 });
 
 route('POST', '/api/articles/:id/bookmark', { auth: true }, async (ctx) => {
@@ -384,37 +488,86 @@ route('POST', '/api/articles/:id/read', { auth: true }, async (ctx) => {
   return { ok: true };
 });
 
+// Đồng bộ các bài đã đọc khi chưa đăng nhập (lưu trên trình duyệt) vào tài khoản
+route('POST', '/api/reading/sync', { auth: true }, async (ctx) => {
+  const ids = Array.isArray(ctx.body.ids) ? ctx.body.ids.map(Number).filter(Boolean).slice(0, 200) : [];
+  for (const id of ids) {
+    await db.run('INSERT OR IGNORE INTO article_reads (user_id,article_id,family_id) VALUES (?,?,?)', [ctx.user.id, id, ctx.user.family_id || null]);
+  }
+  return { ok: true };
+});
+
 route('GET', '/api/reading', { auth: true }, async (ctx) => {
   const items = await db.all(`SELECT a.id,a.slug,a.title,a.category,r.read_at FROM article_reads r JOIN articles a ON a.id=r.article_id
-    WHERE r.user_id=? ORDER BY r.read_at DESC LIMIT 100`, [ctx.user.id]);
+    WHERE r.user_id=? ORDER BY r.read_at DESC LIMIT 200`, [ctx.user.id]);
   const total = await db.get("SELECT COUNT(*) AS n FROM articles WHERE status='published'");
-  return { items, total: Number(total.n) };
+  const saved = await db.get('SELECT COUNT(*) AS n FROM bookmarks WHERE user_id=?', [ctx.user.id]);
+  return { items, total: Number(total.n), saved: Number(saved.n) };
 });
 
-// ---------- Quiz ----------
+// ---------- Lộ trình đọc ----------
+route('GET', '/api/paths', async (ctx) => {
+  const uid = ctx.user ? ctx.user.id : 0;
+  const where = [], params = [];
+  if (AGES.includes(ctx.query.age) && ctx.query.age !== 'all') { where.push("(p.age_group=? OR p.age_group='all')"); params.push(ctx.query.age); }
+  const paths = await db.all(`SELECT p.* FROM paths p ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY p.sort_order, p.id`, params);
+  if (!paths.length) return { items: [] };
+  const items = await db.all(`SELECT pi.path_id,pi.position,a.id,a.slug,a.title,
+      CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
+    FROM path_items pi JOIN articles a ON a.id=pi.article_id
+    LEFT JOIN article_reads r ON r.article_id=a.id AND r.user_id=?
+    WHERE a.status='published' ORDER BY pi.path_id, pi.position`, [uid]);
+  return {
+    items: paths.map((p) => {
+      const list = items.filter((i) => i.path_id === p.id);
+      return { ...p, articles: list, total: list.length, done: list.filter((i) => i.is_read).length };
+    }).filter((p) => p.total > 0),
+  };
+});
+
+// ---------- Quiz / Game ----------
+route('GET', '/api/quizzes', async () => {
+  const items = await db.all(`SELECT q.id,q.title,q.description,q.article_id,q.time_per_question,q.points_per_question,a.title AS article_title,a.slug AS article_slug,
+      (SELECT COUNT(*) FROM quiz_questions x WHERE x.quiz_id=q.id AND x.active=1) AS questions
+    FROM quizzes q LEFT JOIN articles a ON a.id=q.article_id WHERE q.status='published' AND (a.id IS NULL OR a.status='published') ORDER BY q.id DESC`);
+  return { items: items.filter((q) => Number(q.questions) > 0) };
+});
+
 route('GET', '/api/quiz', async (ctx) => {
+  if (ctx.query.quiz) {
+    const quiz = await db.get("SELECT id,title,description,time_per_question,points_per_question FROM quizzes WHERE id=? AND (status='published' OR ?=1)", [Number(ctx.query.quiz), ctx.user && ctx.user.role === 'admin' ? 1 : 0]);
+    if (!quiz) throw new HttpError(404, 'Không tìm thấy game.');
+    const rows = await db.all('SELECT id,question,options,category FROM quiz_questions WHERE quiz_id=? AND active=1 ORDER BY position, id', [quiz.id]);
+    return { quiz, questions: rows.map((r) => ({ ...r, options: JSON.parse(r.options) })) };
+  }
   const n = Math.min(Math.max(Number(ctx.query.n) || 5, 1), 20);
-  const where = ['active=1'], params = [];
-  if (CATEGORIES.includes(ctx.query.category)) { where.push('category=?'); params.push(ctx.query.category); }
-  const rows = await db.all(`SELECT id,question,options,category FROM quiz_questions WHERE ${where.join(' AND ')} ORDER BY RANDOM() LIMIT ?`, [...params, n]);
-  return { questions: rows.map((r) => ({ ...r, options: JSON.parse(r.options) })) };
+  const where = ["x.active=1", "(q.status='published' OR x.quiz_id IS NULL)"], params = [];
+  if (CATEGORIES.includes(ctx.query.category)) { where.push('x.category=?'); params.push(ctx.query.category); }
+  const rows = await db.all(`SELECT x.id,x.question,x.options,x.category FROM quiz_questions x LEFT JOIN quizzes q ON q.id=x.quiz_id
+    WHERE ${where.join(' AND ')} ORDER BY RANDOM() LIMIT ?`, [...params, n]);
+  return { quiz: { id: null, title: 'Thử thách ngẫu nhiên', time_per_question: 45, points_per_question: 10 },
+    questions: rows.map((r) => ({ ...r, options: JSON.parse(r.options) })) };
 });
 
+async function questionPoints(id) {
+  const q = await db.get(`SELECT x.correct_index,x.explanation,x.source,COALESCE(q.points_per_question,10) AS points
+    FROM quiz_questions x LEFT JOIN quizzes q ON q.id=x.quiz_id WHERE x.id=?`, [Number(id)]);
+  return q;
+}
 route('POST', '/api/quiz/check', async (ctx) => {
-  const q = await db.get('SELECT correct_index,explanation,source FROM quiz_questions WHERE id=?', [Number(ctx.body.id)]);
+  const q = await questionPoints(ctx.body.id);
   if (!q) throw new HttpError(404, 'Không tìm thấy câu hỏi.');
-  return { correct: Number(ctx.body.answer) === q.correct_index, correct_index: q.correct_index, explanation: q.explanation, source: q.source };
+  return { correct: Number(ctx.body.answer) === q.correct_index, correct_index: q.correct_index, explanation: q.explanation, source: q.source, points: Number(q.points) };
 });
 
 route('POST', '/api/quiz/submit', { auth: true }, async (ctx) => {
-  const answers = Array.isArray(ctx.body.answers) ? ctx.body.answers.slice(0, 20) : [];
+  const answers = Array.isArray(ctx.body.answers) ? ctx.body.answers.slice(0, 30) : [];
   if (!answers.length) throw bad('Chưa có câu trả lời.');
-  let score = 0;
+  let score = 0, points = 0;
   for (const a of answers) {
-    const q = await db.get('SELECT correct_index FROM quiz_questions WHERE id=?', [Number(a.id)]);
-    if (q && Number(a.answer) === q.correct_index) score++;
+    const q = await questionPoints(a.id);
+    if (q && Number(a.answer) === q.correct_index) { score++; points += Number(q.points); }
   }
-  const points = score * 10;
   await db.run('INSERT INTO quiz_attempts (user_id,family_id,score,total,points) VALUES (?,?,?,?,?)',
     [ctx.user.id, ctx.user.family_id || null, score, answers.length, points]);
   await logAction(ctx.user, 'quiz', `Hoàn thành quiz: ${score}/${answers.length} câu đúng (+${points} điểm)`);
@@ -422,6 +575,7 @@ route('POST', '/api/quiz/submit', { auth: true }, async (ctx) => {
 });
 
 route('GET', '/api/leaderboard', async (ctx) => {
+  const ws = weekStart();
   const families = await db.all(`SELECT f.id, f.name,
       COALESCE((SELECT SUM(points) FROM quiz_attempts q WHERE q.family_id=f.id),0) +
       COALESCE((SELECT SUM(points) FROM mission_completions m WHERE m.family_id=f.id),0) AS points,
@@ -436,13 +590,15 @@ route('GET', '/api/leaderboard', async (ctx) => {
     if (ctx.user.family_id) {
       me.members = await db.all(`SELECT u.id,u.name,u.parent_role,
         COALESCE((SELECT SUM(points) FROM quiz_attempts q WHERE q.user_id=u.id),0) +
-        COALESCE((SELECT SUM(points) FROM mission_completions m WHERE m.user_id=u.id),0) AS points
-        FROM users u WHERE u.family_id=? ORDER BY points DESC`, [ctx.user.family_id]);
+        COALESCE((SELECT SUM(points) FROM mission_completions m WHERE m.user_id=u.id),0) AS points,
+        COALESCE((SELECT SUM(points) FROM quiz_attempts q WHERE q.user_id=u.id AND q.created_at>=?),0) +
+        COALESCE((SELECT SUM(points) FROM mission_completions m WHERE m.user_id=u.id AND m.completed_at>=?),0) AS week_points
+        FROM users u WHERE u.family_id=? ORDER BY points DESC`, [ws, ws, ctx.user.family_id]);
+      me.family_week = me.members.reduce((s, m) => s + Number(m.week_points), 0);
     }
   }
   return { families, me };
 });
-
 // ---------- Nhiệm vụ ----------
 route('GET', '/api/missions', async (ctx) => {
   const missions = await db.all('SELECT id,title,description,participant,goal,points,image,tag FROM missions WHERE active=1 ORDER BY id');
@@ -652,31 +808,45 @@ route('POST', '/api/checklist', { auth: true }, async (ctx) => {
 route('GET', '/api/admin/stats', { admin: true }, async () => {
   const s = await db.get(`SELECT
     (SELECT COUNT(*) FROM articles) AS articles,
+    (SELECT COUNT(*) FROM articles WHERE status='published') AS published,
     (SELECT COUNT(*) FROM articles WHERE status='draft') AS drafts,
+    (SELECT COUNT(DISTINCT article_id) FROM quizzes WHERE article_id IS NOT NULL) AS with_quiz,
+    (SELECT COUNT(*) FROM quizzes) AS quizzes,
+    (SELECT COUNT(*) FROM paths) AS paths,
     (SELECT COUNT(*) FROM users) AS users,
     (SELECT COUNT(*) FROM families) AS families,
-    (SELECT COUNT(*) FROM quiz_questions) AS questions,
-    (SELECT COUNT(*) FROM missions) AS missions,
-    (SELECT COUNT(*) FROM quiz_attempts) AS attempts,
-    (SELECT COUNT(*) FROM mission_completions) AS completions`);
-  const top = await db.all('SELECT id,slug,title,views FROM articles ORDER BY views DESC LIMIT 5');
-  return { stats: s, top, db: db.mode };
+    (SELECT COUNT(*) FROM missions) AS missions`);
+  return { stats: s, db: db.mode };
 });
 
 route('GET', '/api/admin/articles', { admin: true }, async (ctx) => {
-  const where = [], params = [];
-  if (ctx.query.q) { where.push('title LIKE ?'); params.push(`%${str(ctx.query.q, 100)}%`); }
-  if (CATEGORIES.includes(ctx.query.category)) { where.push('category=?'); params.push(ctx.query.category); }
-  if (['draft', 'published'].includes(ctx.query.status)) { where.push('status=?'); params.push(ctx.query.status); }
-  const items = await db.all(`SELECT id,slug,title,category,age_group,status,featured,views,updated_at FROM articles
-    ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY updated_at DESC LIMIT 200`, params);
-  return { items };
+  const q = ctx.query; const where = [], params = [];
+  if (q.q) { where.push('a.title LIKE ?'); params.push(`%${str(q.q, 100)}%`); }
+  if (CATEGORIES.includes(q.category)) { where.push('a.category=?'); params.push(q.category); }
+  if (['draft', 'published'].includes(q.status)) { where.push('a.status=?'); params.push(q.status); }
+  if (Number(q.days) > 0) { where.push("a.updated_at >= datetime('now', ?)"); params.push(`-${Number(q.days)} days`); }
+  if (q.path === 'none') where.push('NOT EXISTS (SELECT 1 FROM path_items pi WHERE pi.article_id=a.id)');
+  else if (Number(q.path)) { where.push('EXISTS (SELECT 1 FROM path_items pi WHERE pi.article_id=a.id AND pi.path_id=?)'); params.push(Number(q.path)); }
+  if (q.has_quiz === '1') where.push('EXISTS (SELECT 1 FROM quizzes z WHERE z.article_id=a.id)');
+  const items = await db.all(`SELECT a.id,a.slug,a.title,a.category,a.age_group,a.status,a.featured,a.views,a.cover_image,a.updated_at,
+      (SELECT COUNT(*) FROM quiz_questions x JOIN quizzes z ON z.id=x.quiz_id WHERE z.article_id=a.id) AS quiz_questions,
+      (SELECT z.id FROM quizzes z WHERE z.article_id=a.id ORDER BY z.id DESC LIMIT 1) AS quiz_id
+    FROM articles a ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY a.updated_at DESC LIMIT 500`, params);
+  const map = await pathMap();
+  for (const i of items) { i.step = stepOf(map, i.id); i.cover_image = i.cover_image && i.cover_image.startsWith('data:') ? 'data' : i.cover_image; }
+  const counts = await db.get(`SELECT COUNT(*) AS total, SUM(status='published') AS published, SUM(status='draft') AS drafts,
+    SUM(EXISTS (SELECT 1 FROM quizzes z WHERE z.article_id=articles.id)) AS with_quiz FROM articles`);
+  return { items, counts };
 });
+
 route('GET', '/api/admin/articles/:id', { admin: true }, async (ctx) => {
   const a = await db.get('SELECT * FROM articles WHERE id=?', [ctx.params.id]);
   if (!a) throw new HttpError(404, 'Không tìm thấy bài viết.');
-  return { article: a };
+  const p = await db.get(`SELECT pi.path_id, pi.position FROM path_items pi JOIN paths p ON p.id=pi.path_id WHERE pi.article_id=? ORDER BY p.sort_order LIMIT 1`, [a.id]);
+  const quiz = await db.get(`SELECT q.id,q.title,(SELECT COUNT(*) FROM quiz_questions x WHERE x.quiz_id=q.id) AS questions FROM quizzes q WHERE q.article_id=? ORDER BY q.id DESC LIMIT 1`, [a.id]);
+  return { article: { ...a, path_id: p ? p.path_id : '', path_position: p ? p.position : '' }, quiz };
 });
+
 async function articleFields(b, id) {
   const title = str(b.title, 250);
   if (!title) throw bad('Vui lòng nhập tiêu đề.');
@@ -692,60 +862,162 @@ async function articleFields(b, id) {
   return {
     slug, title, summary: str(b.summary, 600), content: sanitizeHtml(b.content), category: b.category, age_group: age,
     cover_image: cover, source_name: str(b.source_name, 200), source_url: srcUrl, reviewer: str(b.reviewer, 200),
-    status: b.status === 'draft' ? 'draft' : 'published', featured: b.featured ? 1 : 0,
+    status: b.status === 'published' ? 'published' : 'draft', featured: b.featured ? 1 : 0,
   };
+}
+async function writePathItems(pathId, ids) {
+  await db.run('DELETE FROM path_items WHERE path_id=?', [pathId]);
+  let pos = 1;
+  for (const aid of ids) await db.run('INSERT OR IGNORE INTO path_items (path_id,article_id,position) VALUES (?,?,?)', [pathId, aid, pos++]);
+}
+async function setArticlePath(articleId, pathId, position) {
+  const cur = await db.get(`SELECT pi.path_id FROM path_items pi JOIN paths p ON p.id=pi.path_id WHERE pi.article_id=? ORDER BY p.sort_order LIMIT 1`, [articleId]);
+  const target = Number(pathId) || 0;
+  if (cur && cur.path_id !== target) {
+    const rest = (await db.all('SELECT article_id FROM path_items WHERE path_id=? AND article_id<>? ORDER BY position', [cur.path_id, articleId])).map((r) => r.article_id);
+    await writePathItems(cur.path_id, rest);
+  }
+  if (!target) return;
+  if (!(await db.get('SELECT id FROM paths WHERE id=?', [target]))) throw bad('Lộ trình không tồn tại.');
+  const ids = (await db.all('SELECT article_id FROM path_items WHERE path_id=? AND article_id<>? ORDER BY position', [target, articleId])).map((r) => r.article_id);
+  const at = Math.min(Math.max((Number(position) || ids.length + 1) - 1, 0), ids.length);
+  ids.splice(at, 0, articleId);
+  await writePathItems(target, ids);
 }
 route('POST', '/api/admin/articles', { admin: true }, async (ctx) => {
   const f = await articleFields(ctx.body, 0);
   const cols = Object.keys(f);
   const r = await db.run(`INSERT INTO articles (${cols.join(',')},author_id) VALUES (${cols.map(() => '?').join(',')},?)`,
     [...Object.values(f), ctx.user.id]);
-  return { ok: true, id: r.lastId, slug: f.slug };
+  if (ctx.body.path_id !== undefined) await setArticlePath(r.lastId, ctx.body.path_id, ctx.body.path_position);
+  return { ok: true, id: r.lastId, slug: f.slug, status: f.status };
 });
 route('PUT', '/api/admin/articles/:id', { admin: true }, async (ctx) => {
   const id = Number(ctx.params.id);
+  if (!(await db.get('SELECT id FROM articles WHERE id=?', [id]))) throw new HttpError(404, 'Không tìm thấy bài viết.');
   const f = await articleFields(ctx.body, id);
   const cols = Object.keys(f);
-  await db.run(`UPDATE articles SET ${cols.map((c) => c + '=?').join(',')}, updated_at=datetime('now') WHERE id=?`,
-    [...Object.values(f), id]);
-  return { ok: true, id, slug: f.slug };
+  await db.run(`UPDATE articles SET ${cols.map((c) => c + '=?').join(',')}, updated_at=datetime('now') WHERE id=?`, [...Object.values(f), id]);
+  if (ctx.body.path_id !== undefined) await setArticlePath(id, ctx.body.path_id, ctx.body.path_position);
+  return { ok: true, id, slug: f.slug, status: f.status };
 });
 route('DELETE', '/api/admin/articles/:id', { admin: true }, async (ctx) => {
   const id = Number(ctx.params.id);
+  const quizzes = await db.all('SELECT id FROM quizzes WHERE article_id=?', [id]);
+  for (const q of quizzes) { await db.run('DELETE FROM quiz_questions WHERE quiz_id=?', [q.id]); await db.run('DELETE FROM quizzes WHERE id=?', [q.id]); }
+  const paths = await db.all('SELECT DISTINCT path_id FROM path_items WHERE article_id=?', [id]);
   await db.run('DELETE FROM articles WHERE id=?', [id]);
   await db.run('DELETE FROM bookmarks WHERE article_id=?', [id]);
   await db.run('DELETE FROM article_reads WHERE article_id=?', [id]);
+  for (const p of paths) {
+    const rest = (await db.all('SELECT article_id FROM path_items WHERE path_id=? AND article_id<>? ORDER BY position', [p.path_id, id])).map((r) => r.article_id);
+    await writePathItems(p.path_id, rest);
+  }
   return { ok: true };
 });
 
-route('GET', '/api/admin/questions', { admin: true }, async () => {
-  const rows = await db.all('SELECT * FROM quiz_questions ORDER BY id DESC');
-  return { items: rows.map((r) => ({ ...r, options: JSON.parse(r.options) })) };
+// ----- Quiz / Game (admin) -----
+route('GET', '/api/admin/quizzes', { admin: true }, async () => ({
+  items: await db.all(`SELECT q.*, a.title AS article_title, a.slug AS article_slug,
+      (SELECT COUNT(*) FROM quiz_questions x WHERE x.quiz_id=q.id) AS questions
+    FROM quizzes q LEFT JOIN articles a ON a.id=q.article_id ORDER BY q.updated_at DESC`),
+}));
+route('GET', '/api/admin/quizzes/:id', { admin: true }, async (ctx) => {
+  const quiz = await db.get(`SELECT q.*, a.title AS article_title, a.slug AS article_slug FROM quizzes q LEFT JOIN articles a ON a.id=q.article_id WHERE q.id=?`, [ctx.params.id]);
+  if (!quiz) throw new HttpError(404, 'Không tìm thấy game.');
+  const rows = await db.all('SELECT * FROM quiz_questions WHERE quiz_id=? ORDER BY position, id', [quiz.id]);
+  return { quiz, questions: rows.map((r) => ({ ...r, options: JSON.parse(r.options) })) };
 });
-function questionFields(b) {
-  const question = str(b.question, 500);
-  const options = Array.isArray(b.options) ? b.options.map((o) => str(o, 300)) : [];
-  if (!question) throw bad('Vui lòng nhập câu hỏi.');
-  if (options.length !== 4 || options.some((o) => !o)) throw bad('Cần nhập đủ 4 đáp án.');
-  const c = Number(b.correct_index);
-  if (!(c >= 0 && c <= 3)) throw bad('Vui lòng chọn đáp án đúng.');
-  return [question, JSON.stringify(options), c, str(b.explanation, 1000), str(b.source, 200),
-    CATEGORIES.includes(b.category) ? b.category : 'baby-care', b.active === false || b.active === 0 ? 0 : 1];
+function quizFields(b) {
+  const title = str(b.title, 200);
+  if (!title) throw bad('Vui lòng đặt tên cho game.');
+  const qs = Array.isArray(b.questions) ? b.questions : [];
+  if (!qs.length) throw bad('Game cần ít nhất 1 câu hỏi.');
+  if (qs.length > 50) throw bad('Tối đa 50 câu hỏi cho một game.');
+  const questions = qs.map((q, i) => {
+    const question = str(q.question, 500);
+    const options = (Array.isArray(q.options) ? q.options : []).map((o) => str(o, 300));
+    if (!question) throw bad(`Câu ${i + 1}: chưa nhập nội dung câu hỏi.`);
+    if (options.length < 2 || options.length > 6) throw bad(`Câu ${i + 1}: cần từ 2 đến 6 đáp án.`);
+    if (options.some((o) => !o)) throw bad(`Câu ${i + 1}: có đáp án đang để trống.`);
+    const c = Number(q.correct_index);
+    if (!(c >= 0 && c < options.length)) throw bad(`Câu ${i + 1}: hãy chọn đáp án đúng.`);
+    return { question, options, correct_index: c, explanation: str(q.explanation, 1000), source: str(q.source, 200),
+      category: CATEGORIES.includes(q.category) ? q.category : (CATEGORIES.includes(b.category) ? b.category : 'baby-care') };
+  });
+  const articleId = Number(b.article_id) || null;
+  return {
+    quiz: { title, description: str(b.description, 500), article_id: articleId,
+      time_per_question: Math.min(Math.max(Number(b.time_per_question) || 45, 10), 300),
+      points_per_question: Math.min(Math.max(Number(b.points_per_question) || 10, 1), 100),
+      status: b.status === 'draft' ? 'draft' : 'published' },
+    questions,
+  };
 }
-route('POST', '/api/admin/questions', { admin: true }, async (ctx) => {
-  const r = await db.run('INSERT INTO quiz_questions (question,options,correct_index,explanation,source,category,active) VALUES (?,?,?,?,?,?,?)', questionFields(ctx.body));
+async function writeQuestions(quizId, questions) {
+  await db.run('DELETE FROM quiz_questions WHERE quiz_id=?', [quizId]);
+  let pos = 1;
+  for (const q of questions) {
+    await db.run('INSERT INTO quiz_questions (quiz_id,position,question,options,correct_index,explanation,source,category,active) VALUES (?,?,?,?,?,?,?,?,1)',
+      [quizId, pos++, q.question, JSON.stringify(q.options), q.correct_index, q.explanation, q.source, q.category]);
+  }
+}
+route('POST', '/api/admin/quizzes', { admin: true }, async (ctx) => {
+  const { quiz, questions } = quizFields(ctx.body);
+  if (quiz.article_id && !(await db.get('SELECT id FROM articles WHERE id=?', [quiz.article_id]))) throw bad('Bài viết liên kết không tồn tại.');
+  const r = await db.run('INSERT INTO quizzes (title,description,article_id,time_per_question,points_per_question,status) VALUES (?,?,?,?,?,?)',
+    [quiz.title, quiz.description, quiz.article_id, quiz.time_per_question, quiz.points_per_question, quiz.status]);
+  await writeQuestions(r.lastId, questions);
   return { ok: true, id: r.lastId };
 });
-route('PUT', '/api/admin/questions/:id', { admin: true }, async (ctx) => {
-  await db.run('UPDATE quiz_questions SET question=?,options=?,correct_index=?,explanation=?,source=?,category=?,active=? WHERE id=?',
-    [...questionFields(ctx.body), ctx.params.id]);
-  return { ok: true };
+route('PUT', '/api/admin/quizzes/:id', { admin: true }, async (ctx) => {
+  const id = Number(ctx.params.id);
+  if (!(await db.get('SELECT id FROM quizzes WHERE id=?', [id]))) throw new HttpError(404, 'Không tìm thấy game.');
+  const { quiz, questions } = quizFields(ctx.body);
+  await db.run("UPDATE quizzes SET title=?,description=?,article_id=?,time_per_question=?,points_per_question=?,status=?,updated_at=datetime('now') WHERE id=?",
+    [quiz.title, quiz.description, quiz.article_id, quiz.time_per_question, quiz.points_per_question, quiz.status, id]);
+  await writeQuestions(id, questions);
+  return { ok: true, id };
 });
-route('DELETE', '/api/admin/questions/:id', { admin: true }, async (ctx) => {
-  await db.run('DELETE FROM quiz_questions WHERE id=?', [ctx.params.id]);
+route('DELETE', '/api/admin/quizzes/:id', { admin: true }, async (ctx) => {
+  await db.run('DELETE FROM quiz_questions WHERE quiz_id=?', [ctx.params.id]);
+  await db.run('DELETE FROM quizzes WHERE id=?', [ctx.params.id]);
   return { ok: true };
 });
 
+// ----- Lộ trình đọc (admin) -----
+route('GET', '/api/admin/paths', { admin: true }, async () => {
+  const paths = await db.all('SELECT * FROM paths ORDER BY sort_order, id');
+  const items = await db.all('SELECT pi.path_id,pi.position,a.id,a.title,a.status FROM path_items pi JOIN articles a ON a.id=pi.article_id ORDER BY pi.path_id,pi.position');
+  return { items: paths.map((p) => ({ ...p, articles: items.filter((i) => i.path_id === p.id) })) };
+});
+function pathFields(b) {
+  const title = str(b.title, 200);
+  if (!title) throw bad('Vui lòng nhập tên lộ trình.');
+  return [title, str(b.description, 500), AGES.includes(b.age_group) ? b.age_group : 'all',
+    ['baby', 'bottle', 'sprout', 'heart', 'foot', 'syringe', 'book'].includes(b.icon) ? b.icon : 'baby', Number(b.sort_order) || 0];
+}
+route('POST', '/api/admin/paths', { admin: true }, async (ctx) => {
+  const f = pathFields(ctx.body);
+  let slug = slugify(f[0]); const base = slug; let i = 2;
+  while (await db.get('SELECT id FROM paths WHERE slug=?', [slug])) slug = `${base}-${i++}`;
+  const r = await db.run('INSERT INTO paths (slug,title,description,age_group,icon,sort_order) VALUES (?,?,?,?,?,?)', [slug, ...f]);
+  if (Array.isArray(ctx.body.article_ids)) await writePathItems(r.lastId, ctx.body.article_ids.map(Number).filter(Boolean));
+  return { ok: true, id: r.lastId };
+});
+route('PUT', '/api/admin/paths/:id', { admin: true }, async (ctx) => {
+  const id = Number(ctx.params.id);
+  await db.run('UPDATE paths SET title=?,description=?,age_group=?,icon=?,sort_order=? WHERE id=?', [...pathFields(ctx.body), id]);
+  if (Array.isArray(ctx.body.article_ids)) await writePathItems(id, ctx.body.article_ids.map(Number).filter(Boolean));
+  return { ok: true, id };
+});
+route('DELETE', '/api/admin/paths/:id', { admin: true }, async (ctx) => {
+  await db.run('DELETE FROM path_items WHERE path_id=?', [ctx.params.id]);
+  await db.run('DELETE FROM paths WHERE id=?', [ctx.params.id]);
+  return { ok: true };
+});
+
+// ----- Nhiệm vụ (admin) -----
 route('GET', '/api/admin/missions', { admin: true }, async () => ({ items: await db.all('SELECT * FROM missions ORDER BY id DESC') }));
 function missionFields(b) {
   const title = str(b.title, 200);
@@ -781,7 +1053,6 @@ route('PUT', '/api/admin/users/:id', { admin: true }, async (ctx) => {
   forgetUser(id);
   return { ok: true };
 });
-
 route('GET', '/api/health', async () => ({ ok: true, db: db.mode, time: new Date().toISOString() }));
 
 // ======================= Xử lý HTTP =======================

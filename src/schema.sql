@@ -162,3 +162,34 @@ CREATE TABLE IF NOT EXISTS activity_log (
   detail TEXT DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- ===== Bản cập nhật 2: Lộ trình đọc & Quiz/Game =====
+CREATE TABLE IF NOT EXISTS paths (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  slug TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  age_group TEXT DEFAULT 'all',      -- pregnancy | 0-6 | 6-12 | 12-24 | all
+  icon TEXT DEFAULT 'baby',
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS path_items (
+  path_id INTEGER NOT NULL,
+  article_id INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  PRIMARY KEY (path_id, article_id)
+);
+
+CREATE TABLE IF NOT EXISTS quizzes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  article_id INTEGER,                -- quiz gắn với bài viết (có thể trống)
+  time_per_question INTEGER NOT NULL DEFAULT 45,
+  points_per_question INTEGER NOT NULL DEFAULT 10,
+  status TEXT NOT NULL DEFAULT 'published', -- published | draft
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

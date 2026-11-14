@@ -282,6 +282,24 @@ const missions = [
   { t: 'Kiểm tra lịch tiêm chủng của bé', d: 'Xem sổ tiêm chủng và thêm mũi tiêm tiếp theo vào Lịch chung gia đình.', p: 'Bố và mẹ', g: 'Chủ động chăm sóc sức khỏe', pts: 10, tag: 'health' },
 ];
 
+const PATHS = [
+  { slug: 'tuan-dau-doi-cua-be', title: 'Tuần đầu đời của bé', icon: 'baby', age: '0-6',
+    desc: 'Những điều ba mẹ cần nắm ngay khi đón bé về nhà – an toàn trước, chăm sóc hằng ngày sau.',
+    items: ['dau-hieu-nguy-hiem-tre-so-sinh', 'cham-soc-ron-tre-so-sinh', 'giu-am-cho-tre-so-sinh', 'dau-hieu-tre-bu-du-sua', 'loi-ich-cua-sua-me', 'lich-tiem-chung-mo-rong'] },
+  { slug: 'nuoi-con-bang-sua-me', title: 'Nuôi con bằng sữa mẹ', icon: 'bottle', age: '0-6',
+    desc: 'Hiểu về sữa mẹ, nhận biết bé bú đủ và chăm sóc mẹ khi cho con bú.',
+    items: ['loi-ich-cua-sua-me', 'dau-hieu-tre-bu-du-sua', 'phuc-hoi-suc-khoe-sau-sinh'] },
+  { slug: 'bat-dau-an-dam', title: 'Bắt đầu ăn dặm', icon: 'sprout', age: '6-12',
+    desc: 'Từ bữa ăn dặm đầu tiên đến theo dõi các mốc phát triển nửa sau năm đầu.',
+    items: ['huong-dan-an-dam-dung-cach', 'cot-moc-phat-trien-6-12-thang', 'lich-tiem-chung-mo-rong'] },
+  { slug: 'chuan-bi-don-be', title: 'Chuẩn bị đón bé', icon: 'heart', age: 'pregnancy',
+    desc: 'Dinh dưỡng thai kỳ, chuẩn bị sinh và những dấu hiệu cần biết.',
+    items: ['dinh-duong-thai-ky', 'dau-hieu-nguy-hiem-tre-so-sinh', 'phuc-hoi-suc-khoe-sau-sinh'] },
+  { slug: 'be-tap-noi', title: 'Bé tập đi, tập nói', icon: 'foot', age: '12-24',
+    desc: 'Đồng hành cùng bé 1–2 tuổi phát triển ngôn ngữ và vận động.',
+    items: ['phat-trien-ngon-ngu-12-24-thang', 'cot-moc-phat-trien-6-12-thang'] },
+];
+
 async function seed(db) {
   const a = await db.get('SELECT COUNT(*) AS n FROM articles');
   if (!a || Number(a.n) === 0) {
@@ -309,6 +327,29 @@ async function seed(db) {
         [x.t, x.d, x.p, x.g, x.pts, x.tag]);
     }
     console.log(`[seed] Đã thêm ${missions.length} nhiệm vụ`);
+  }
+  // Lộ trình đọc mẫu
+  const pc = await db.get('SELECT COUNT(*) AS n FROM paths');
+  if (!pc || Number(pc.n) === 0) {
+    let order = 0;
+    for (const p of PATHS) {
+      const r = await db.run('INSERT INTO paths (slug,title,description,age_group,icon,sort_order) VALUES (?,?,?,?,?,?)',
+        [p.slug, p.title, p.desc, p.age, p.icon, order++]);
+      let pos = 1;
+      for (const slug of p.items) {
+        const a = await db.get('SELECT id FROM articles WHERE slug=?', [slug]);
+        if (a) await db.run('INSERT OR IGNORE INTO path_items (path_id,article_id,position) VALUES (?,?,?)', [r.lastId, a.id, pos++]);
+      }
+    }
+    console.log(`[seed] Đã thêm ${PATHS.length} lộ trình đọc`);
+  }
+  // Gom các câu hỏi cũ (chưa thuộc game nào) vào một game chung
+  const orphan = await db.get('SELECT COUNT(*) AS n FROM quiz_questions WHERE quiz_id IS NULL');
+  if (orphan && Number(orphan.n) > 0) {
+    const r = await db.run("INSERT INTO quizzes (title,description,status) VALUES (?,?,'published')",
+      ['Thử thách kiến thức tổng hợp', 'Câu hỏi về chăm sóc trẻ sơ sinh, dinh dưỡng, tiêm chủng và chăm sóc mẹ.']);
+    await db.run('UPDATE quiz_questions SET quiz_id=? WHERE quiz_id IS NULL', [r.lastId]);
+    console.log('[seed] Đã gom câu hỏi cũ vào game chung');
   }
 }
 
