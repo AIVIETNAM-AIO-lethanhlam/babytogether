@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function startScreen() {
     clearInterval(timer);
-    box.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px"><span class="label">Thử thách kiến thức</span><h2 class="h2">Chọn một game để bắt đầu</h2>
+    box.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px"><span class="label">Thử thách kiến thức</span><h2 class="h3">Chọn một game để bắt đầu</h2>
       <p class="muted" style="margin:0">Trả lời đúng để ghi điểm cho bạn và cả gia đình. Mỗi câu đều có giải thích từ nguồn y khoa.</p></div>
       <div class="game-pick" id="games">
         <button type="button" data-g="random" class="${pick === 'random' ? 'active' : ''}"><span class="ib">${icon('sparkles', 22)}</span><span style="flex:1"><b>Thử thách ngẫu nhiên</b><br><span class="small muted">5 câu hỏi từ mọi chủ đề · 45 giây/câu</span></span></button>

@@ -17,8 +17,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderCats() {
     const total = Object.values(stats.categories).reduce((a, b) => a + b, 0);
-    $('cats').innerHTML = `<button class="chip ${!state.category ? 'active' : ''}" data-cat="">Tất cả · ${total}</button>` +
-      Object.entries(CATEGORIES).map(([k, v]) => `<button class="chip ${state.category === k ? 'active' : ''}" data-cat="${k}">${v} · ${stats.categories[k] || 0}</button>`).join('');
+    $('cats').innerHTML = `<button class="chip ${!state.category ? 'active' : ''}" data-cat="">Tất cả <span class="count">${total}</span></button>` +
+      Object.entries(CATEGORIES).map(([k, v]) => `<button class="chip ${state.category === k ? 'active' : ''}" data-cat="${k}">${v} <span class="count">${stats.categories[k] || 0}</span></button>`).join('');
   }
   $('cats').addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; state.category = b.dataset.cat; reload(); });
 

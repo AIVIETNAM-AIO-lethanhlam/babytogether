@@ -3,19 +3,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const { api, getMe, esc, icon, toast, modal, compressImage, loginHint, fmtDate, todayStr, cover } = BT;
   const root = document.getElementById('family');
   const me = await getMe();
-  if (!me.user) { root.innerHTML = `<div style="padding:56px 0 96px;display:flex;flex-direction:column;gap:20px"><h1 class="h1">Nhật ký gia đình</h1>${loginHint('Đăng nhập để mở Nhật ký gia đình – nơi bố mẹ cùng ghi lại hành trình chăm con.')}</div>`; return; }
-  if (!me.family) { root.innerHTML = `<div style="padding:56px 0 96px;display:flex;flex-direction:column;gap:20px"><h1 class="h1">Nhật ký gia đình</h1><div class="hint-box"><span>Bạn chưa có hồ sơ gia đình. Tạo gia đình mới hoặc tham gia gia đình của bố/mẹ bằng Family ID.</span><a class="btn" href="/tai-khoan">Thiết lập gia đình ${icon('arrow', 18)}</a></div></div>`; return; }
+  if (!me.user) { root.innerHTML = `<div style="padding:48px 0 96px">${loginHint('Đăng nhập để mở Nhật ký gia đình – nơi bố mẹ cùng ghi lại hành trình chăm con.')}</div>`; return; }
+  if (!me.family) { root.innerHTML = `<div style="padding:48px 0 96px"><div class="hint-box"><span>Bạn chưa có hồ sơ gia đình. Tạo gia đình mới hoặc tham gia gia đình của bố/mẹ bằng Family ID.</span><a class="btn" href="/tai-khoan">Thiết lập gia đình ${icon('arrow', 18)}</a></div></div>`; return; }
   const f = me.family, child = (me.children || [])[0];
   let dailyDate = todayStr(), weekOffset = 0;
   const childTxt = child ? (child.birth_date ? `Bé ${child.name} ${Math.floor((Date.now() - new Date(child.birth_date)) / (30.44 * 864e5))} tháng` : `Bé ${child.name} (dự sinh ${fmtDate(child.due_date)})`) : '';
-  root.innerHTML = `
+  document.getElementById('fam-hero').innerHTML = `
     <div class="fam-head">
       <div style="display:flex;gap:20px;align-items:center"><div class="avatars">${me.members.slice(0, 4).map((m, i) => `<span class="avatar" style="background:${['var(--sky-300)', 'var(--sky-500)', 'var(--sky-200)', 'var(--sky-400)'][i]};color:${i === 1 ? '#fff' : 'var(--sky-950)'}">${esc(m.name.charAt(0).toUpperCase())}</span>`).join('')}</div>
-        <div><h1 class="h1">${esc(f.name)}</h1><p class="lead" style="margin:0">${me.members.map((m) => esc((m.parent_role || '') + ' ' + m.name)).join(' · ')}${childTxt ? ' · ' + esc(childTxt) : ''}</p></div></div>
+        <div class="page-head"><span class="label">Nhật ký gia đình</span><h1 class="h1">${esc(f.name)}</h1><p class="lead">${me.members.map((m) => esc((m.parent_role || '') + ' ' + m.name)).join(' · ')}${childTxt ? ' · ' + esc(childTxt) : ''}</p></div></div>
       <div class="chips"><button class="fid" id="copy-fid" title="Sao chép"><span class="ib sm">${icon('users', 18)}</span><span style="text-align:left"><span class="label" style="color:var(--n-600)">Family ID</span><br><b style="color:var(--sky-700)">${esc(f.id)}</b></span>${icon('copy', 18)}</button>
         <a class="btn" href="/tai-khoan">Mời bố/mẹ ${icon('arrow', 18)}</a></div>
-    </div>
-    <div class="grid-4" id="stats"></div>
+    </div>`;
+  root.innerHTML = `
+    <div class="grid-4" id="stats" style="padding-top:48px"></div>
     <div class="fam-layout">
       <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
         <div class="card" id="daily"></div><div class="card" id="calendar"></div><div class="card" id="memories"></div>

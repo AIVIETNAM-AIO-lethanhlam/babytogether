@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ${fc(60, 420, 'bulb', '', 'Nhiệm vụ hôm nay', daily ? daily.title : 'Đọc sách tranh cùng bé 15 phút')}`;
 
   // Trust stats
-  $('trust-stats').innerHTML = `<div><b>${stats.articles || 0}</b> bài viết kiến thức</div><div><b>${stats.paths || 0}</b> lộ trình đọc</div><div><b>${stats.families || 0}</b> gia đình tham gia</div>`;
+  $('trust-stats').innerHTML = `<div><b>${stats.articles || 0}</b><span>bài viết kiến thức</span></div><div><b>${stats.paths || 0}</b><span>lộ trình đọc</span></div><div><b>${stats.families || 0}</b><span>gia đình tham gia</span></div>`;
 
   // Tiếp tục đọc
   const going = paths.items.find((p) => p.done > 0 && p.done < p.total) || null;

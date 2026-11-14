@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('feature').innerHTML = `${cover(daily.image, 'book', 'deep', 120)}
       <div style="display:flex;flex-direction:column;gap:18px;align-items:flex-start">
         <span class="label">Nhiệm vụ hôm nay · ${daily.participant === 'Bố và mẹ' ? 'Gia đình cùng nhau' : 'Dành cho ' + esc(daily.participant)}</span>
-        <h2 class="h1">${esc(daily.title)}</h2>
+        <h2 class="h2">${esc(daily.title)}</h2>
         ${daily.description ? `<p class="lead">${esc(daily.description)}</p>` : ''}
         ${daily.goal ? `<p class="muted" style="margin:0;display:flex;gap:8px;align-items:center">${icon('target', 18)} Mục tiêu: ${esc(daily.goal)}</p>` : ''}
         <span class="tag" style="font-size:15px;padding:8px 14px">${icon('trophy', 16)} +${daily.points} điểm</span>
