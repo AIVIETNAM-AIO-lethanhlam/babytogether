@@ -135,3 +135,10 @@ body.admin { background: var(--n-50); padding-bottom: 0; }
   .adm-side { flex-wrap: nowrap; overflow-x: auto; } .adm-side a, .adm-side button { flex: 0 0 auto; white-space: nowrap; }
   .adm-table-wrap, .table { overflow-x: auto; } .table table { min-width: 720px; }
 }
+
+/* Logo + nhãn ADMIN trên trang đăng nhập (nền tối) */
+#brand { display: flex; align-items: center; gap: 12px; }
+#brand .logo { color: var(--white); line-height: 1; }
+#brand .logo b { color: var(--sky-300); }
+#brand .adm-pill { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); line-height: 1; padding: 6px 10px; }
+.adm-top .l .logo { line-height: 1; }

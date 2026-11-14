@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const { api, getMe, icon, logoHtml } = BT;
   const me = await getMe();
   if (me.user && me.user.role === 'admin') { location.replace('/admin'); return; }
-  document.getElementById('brand').innerHTML = logoHtml() + ' <span class="adm-pill" style="background:var(--sky-900);margin-left:8px">ADMIN</span>';
+  document.getElementById('brand').innerHTML = logoHtml() + '<span class="adm-pill">ADMIN</span>';
   document.querySelector('#brand .logo').style.color = '#fff';
   document.getElementById('feats').innerHTML = [['book', 'Trình soạn thảo bài viết như Notion'], ['quiz', 'Tạo quiz với số đáp án linh hoạt'], ['route', 'Sắp xếp lộ trình đọc cho ba mẹ']]
     .map(([i, t]) => `<div style="display:flex;gap:12px;align-items:center;font-weight:500"><span class="ib sm" style="background:var(--sky-800);color:var(--sky-300)">${icon(i, 18)}</span>${t}</div>`).join('');

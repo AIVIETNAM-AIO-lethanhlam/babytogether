@@ -1158,13 +1158,18 @@ async function ensureAdmin() {
   let password = process.env.ADMIN_PASSWORD || '';
   if (!email && db.mode === 'local-sqlite') { email = 'admin@babytogether.local'; password = 'admin123'; }
   if (!email || !password) { console.warn('[admin] Chưa đặt ADMIN_EMAIL / ADMIN_PASSWORD – chưa tạo tài khoản quản trị.'); return; }
-  const u = await db.get('SELECT id,role FROM users WHERE email=?', [email]);
+  const u = await db.get('SELECT id,role,password_hash FROM users WHERE email=?', [email]);
   if (!u) {
     await db.run("INSERT INTO users (email,password_hash,name,role,parent_role) VALUES (?,?,?,'admin','Người chăm sóc')",
       [email, hashPassword(password), 'Quản trị viên']);
     console.log(`[admin] Đã tạo tài khoản quản trị ${email}`);
-  } else if (u.role !== 'admin') {
-    await db.run("UPDATE users SET role='admin' WHERE id=?", [u.id]);
+  } else {
+    // Biến môi trường là nguồn chuẩn: đổi ADMIN_PASSWORD trên Render rồi deploy lại là đổi được mật khẩu admin
+    if (u.role !== 'admin') await db.run("UPDATE users SET role='admin' WHERE id=?", [u.id]);
+    if (!verifyPassword(password, u.password_hash)) {
+      await db.run('UPDATE users SET password_hash=? WHERE id=?', [hashPassword(password), u.id]);
+      console.log(`[admin] Đã cập nhật mật khẩu quản trị theo ADMIN_PASSWORD`);
+    }
   }
 }
 
