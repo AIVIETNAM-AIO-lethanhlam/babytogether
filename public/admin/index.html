@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Quản trị – BabyTogether</title>
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Montserrat:wght@400;500;600&display=swap&subset=vietnamese" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+<link rel="stylesheet" href="/assets/css/admin.css">
+<script src="/assets/js/common.js" defer></script>
+<script src="/assets/js/admin.js" defer></script>
+</head>
+<body data-page="admin" class="admin">
+<div class="admin-top">
+  <a href="/" class="logo">BabyTogether</a>
+  <span class="admin-badge">Quản trị</span>
+  <div class="admin-user" id="admin-user"></div>
+</div>
+<div class="admin-layout">
+  <nav class="admin-nav" id="admin-nav" hidden>
+    <button data-view="dashboard">Tổng quan</button>
+    <button data-view="articles">Bài viết</button>
+    <button data-view="editor">+ Viết bài mới</button>
+    <button data-view="questions">Câu hỏi quiz</button>
+    <button data-view="missions">Nhiệm vụ</button>
+    <button data-view="users">Người dùng</button>
+    <a href="/" target="_blank" rel="noopener">Xem website ↗</a>
+  </nav>
+  <main class="admin-main" id="admin-main"><div class="loading">Đang tải…</div></main>
+</div>
+</body>
+</html>

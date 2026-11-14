@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thử thách kiến thức – BabyTogether</title>
+<meta name="description" content="Bố và mẹ cùng trả lời câu hỏi về chăm sóc trẻ, nhận giải thích từ tài liệu y khoa và ghi điểm cho gia đình.">
+<link rel="icon" href="/assets/img/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;1,400&family=Montserrat:wght@400;500;600&display=swap&subset=vietnamese" rel="stylesheet">
+<link rel="stylesheet" href="/assets/css/style.css">
+<script src="/assets/js/common.js" defer></script>
+<script src="/assets/js/quiz.js" defer></script>
+</head>
+<body data-page="choi-hoc">
+<header class="site-header"></header>
+<main>
+<div class="container">
+  <div class="back-link"><a class="btn-text" href="/"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"/></svg> Quay lại</a></div>
+  <section class="page-head tight">
+    <h1 class="h1">Thử thách kiến thức</h1>
+    <div class="divider"><span></span></div>
+    <p class="lead">Cùng nhau trả lời câu hỏi và ghi điểm nhé!</p>
+  </section>
+</div>
+<nav class="tabs" aria-label="Chơi & Học">
+  <a href="/choi-hoc" class="active">Thử thách kiến thức</a>
+  <a href="/nhiem-vu">Nhiệm vụ đời thực</a>
+</nav>
+<div class="container-narrow">
+  <div class="quiz" id="quiz"></div>
+</div>
+<section class="section section-tint">
+  <div class="container">
+    <div class="two-col">
+      <div class="stack">
+        <div class="col-head"><h2>Xếp hạng gia đình</h2><div class="divider sm"><span></span></div></div>
+        <div class="leaderboard" id="lb-families"></div>
+      </div>
+      <div class="stack">
+        <div class="col-head"><h2>Điểm của bạn</h2><div class="divider sm"><span></span></div></div>
+        <div id="lb-me"></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+<footer class="site-footer"></footer>
+</body>
+</html>

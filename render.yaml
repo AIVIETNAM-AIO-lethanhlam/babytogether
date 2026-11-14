@@ -1,0 +1,24 @@
+# Cấu hình Render (Blueprint). Có thể dùng file này hoặc tạo Web Service thủ công (xem README.md).
+services:
+  - type: web
+    name: babytogether
+    runtime: node
+    plan: free
+    buildCommand: "echo 'Không cần cài thư viện'"
+    startCommand: node server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: CF_ACCOUNT_ID
+        sync: false
+      - key: CF_D1_DATABASE_ID
+        sync: false
+      - key: CF_API_TOKEN
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
