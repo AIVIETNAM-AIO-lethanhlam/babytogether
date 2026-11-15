@@ -713,7 +713,7 @@ route('POST', '/api/activities', { auth: true }, async (ctx) => {
   const title = str(ctx.body.title, 200);
   if (!title) throw bad('Vui lòng nhập tên hoạt động.');
   const date = isDate(ctx.body.date) ? ctx.body.date : today();
-  const done = ctx.body.done ? 1 : 0;
+  const done = ctx.body.done && date <= today() ? 1 : 0;
   const r = await db.run('INSERT INTO activities (family_id,user_id,title,date,done,done_by) VALUES (?,?,?,?,?,?)',
     [ctx.user.family_id, ctx.user.id, title, date, done, done ? ctx.user.id : null]);
   await logAction(ctx.user, 'activity', `Ghi nhận hoạt động: ${title}`);
@@ -722,6 +722,9 @@ route('POST', '/api/activities', { auth: true }, async (ctx) => {
 route('PUT', '/api/activities/:id', { auth: true }, async (ctx) => {
   needFamily(ctx.user);
   const done = ctx.body.done ? 1 : 0;
+  const act = await db.get('SELECT date FROM activities WHERE id=? AND family_id=?', [ctx.params.id, ctx.user.family_id]);
+  if (!act) throw new HttpError(404, 'Không tìm thấy hoạt động.');
+  if (done && act.date > today()) throw bad('Chưa tới ngày này nên chưa thể đánh dấu hoàn thành.');
   await db.run('UPDATE activities SET done=?, done_by=? WHERE id=? AND family_id=?',
     [done, done ? ctx.user.id : null, ctx.params.id, ctx.user.family_id]);
   return { ok: true };

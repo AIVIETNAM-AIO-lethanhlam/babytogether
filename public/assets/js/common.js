@@ -198,7 +198,7 @@
         <nav class="main-nav" aria-label="Điều hướng chính">${NAV.map(([k, l, h]) => `<a href="${h}" class="${page === k ? 'active' : ''}">${l}</a>`).join('')}</nav>
         <div class="header-actions">
           <button class="icon-btn" id="hdr-search" aria-label="Tìm kiếm">${icon('search', 20)}</button>
-          <a class="icon-btn hide-m" href="/hanh-trinh#nhac-lich" aria-label="Nhắc lịch">${icon('bell', 20)}</a>
+          <button class="icon-btn hide-m notif-btn" id="hdr-bell" aria-label="Thông báo" aria-haspopup="true">${icon('bell', 20)}<i class="dot" hidden></i></button>
           <a href="/tai-khoan" class="avatar" id="hdr-avatar" aria-label="Tài khoản">${icon('user', 20)}</a>
         </div></div>`;
       header.querySelector('#hdr-search').addEventListener('click', () => {
@@ -209,6 +209,8 @@
         header.appendChild(pop); pop.q.focus();
         pop.addEventListener('submit', (e) => { e.preventDefault(); location.href = '/kien-thuc?q=' + encodeURIComponent(pop.q.value.trim()); });
       });
+      header.querySelector('#hdr-bell').addEventListener('click', (e) => { e.stopPropagation(); toggleNotif(header); });
+      document.addEventListener('click', (e) => { if (!e.target.closest('.notif-pop') && !e.target.closest('#hdr-bell')) header.querySelectorAll('.notif-pop').forEach((p) => p.remove()); });
       getMe().then((me) => {
         const a = document.getElementById('hdr-avatar');
         if (me.user) {
@@ -221,6 +223,7 @@
           const ids = localRead.get();
           if (ids.length) api('/api/reading/sync', { method: 'POST', body: { ids } }).then(() => localRead.clear()).catch(() => {});
           showReminders(me, header);
+          loadNotifs(me).then((n) => { const d = header.querySelector('#hdr-bell .dot'); if (n.urgent) { d.hidden = false; d.textContent = n.urgent > 9 ? '9+' : n.urgent; } }).catch(() => {});
         } else a.title = 'Đăng nhập';
       });
       const tb = document.createElement('nav'); tb.className = 'tabbar'; tb.setAttribute('aria-label', 'Điều hướng');
@@ -235,8 +238,47 @@
         <div><h4>Đồng hành</h4><a href="/hanh-trinh">Hành trình theo tuổi</a><a href="/choi-hoc">Thử thách kiến thức</a><a href="/nhiem-vu">Nhiệm vụ gia đình</a><a href="/gia-dinh">Nhật ký gia đình</a></div>
         <div><h4>BabyTogether</h4><a href="/kien-thuc">Lộ trình đọc</a><a href="/tai-khoan">Tài khoản</a><a href="/admin/login">Dành cho quản trị viên</a></div>
         </div><div class="footer-bottom"><span>© ${new Date().getFullYear()} BabyTogether · Thông tin chỉ mang tính tham khảo, không thay thế tư vấn y tế.</span><span>Làm với ♥ cho ba mẹ</span></div></div>`;
-      footer.querySelector('.logo').style.color = '#fff';
+      footer.querySelector('.logo').classList.add('on-dark');
     }
+  }
+
+  // ---------- Thông báo (chuông) ----------
+  let notifCache = null;
+  async function loadNotifs(me) {
+    if (notifCache) return notifCache;
+    const out = { items: [], urgent: 0, state: !me.user ? 'guest' : !me.family ? 'nofam' : 'ok' };
+    if (out.state !== 'ok') return (notifCache = out);
+    const s = me.user.settings || {};
+    const t = todayStr(); const end = new Date(Date.now() + (7 + 7 * 24) * 3600e3).toISOString().slice(0, 10);
+    const dd = (d) => Math.round((new Date(d + 'T00:00:00Z') - new Date(t + 'T00:00:00Z')) / 864e5);
+    const when = (n) => n === 0 ? 'Hôm nay' : n === 1 ? 'Ngày mai' : n === 2 ? 'Ngày mốt' : `Còn ${n} ngày`;
+    const [ev, ms] = await Promise.all([api(`/api/events?from=${t}&to=${end}`).catch(() => ({ items: [] })), api('/api/missions').catch(() => null)]);
+    ev.items.forEach((e) => {
+      const n = dd(e.date); const health = e.type === 'vaccine' || e.type === 'checkup';
+      if (health && s.vaccine === false) return;
+      if (!health && n > 1) return; // lịch khác: chỉ báo hôm nay & ngày mai
+      if (health && n <= 3) out.urgent++;
+      out.items.push({ n, icon: e.type === 'vaccine' ? 'syringe' : e.type === 'checkup' ? 'stetho' : 'calendar', kind: e.type === 'vaccine' ? 'Lịch tiêm chủng' : e.type === 'checkup' ? 'Lịch khám sức khỏe' : 'Lịch gia đình',
+        title: e.title, sub: `${when(n)} · ${fmtDate(e.date)}${e.time ? ' lúc ' + e.time : ''}`, href: health ? '/hanh-trinh#nhac-lich' : '/gia-dinh', hot: health && n <= 3 });
+    });
+    if (ms && ms.daily_id && s.mission !== false) {
+      const m = ms.items.find((x) => x.id === ms.daily_id);
+      if (m) { const done = m.done_by.length > 0; if (!done) out.urgent++;
+        out.items.unshift({ n: -1, icon: done ? 'check' : 'target', kind: 'Nhiệm vụ hôm nay', title: m.title, sub: done ? 'Đã hoàn thành – ' + m.done_by.join(', ') : `Chưa hoàn thành – +${m.points} điểm`, href: '/nhiem-vu', hot: !done, done }); }
+    }
+    return (notifCache = out);
+  }
+  async function toggleNotif(header) {
+    const old = header.querySelector('.notif-pop'); if (old) { old.remove(); return; }
+    const pop = document.createElement('div'); pop.className = 'notif-pop'; pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Thông báo');
+    pop.innerHTML = '<div class="loading">Đang tải…</div>'; header.appendChild(pop);
+    const me = await getMe(); const n = await loadNotifs(me);
+    const head = `<div class="np-head"><b>Thông báo</b>${n.items.length ? `<span class="small muted">${n.items.length} mục</span>` : ''}</div>`;
+    if (n.state === 'guest') pop.innerHTML = head + `<div class="np-empty"><span class="ib lg">${icon('bell', 24)}</span><p>Đăng nhập để nhận nhắc lịch tiêm chủng, lịch khám và nhiệm vụ hằng ngày.</p><a class="btn btn-sm" href="/tai-khoan">Đăng nhập</a></div>`;
+    else if (n.state === 'nofam') pop.innerHTML = head + `<div class="np-empty"><span class="ib lg">${icon('users', 24)}</span><p>Tạo hoặc tham gia gia đình để bố mẹ cùng nhận nhắc lịch.</p><a class="btn btn-sm" href="/tai-khoan">Thiết lập gia đình</a></div>`;
+    else pop.innerHTML = head + (n.items.length ? `<div class="np-list">${n.items.map((x) => `<a class="np-item ${x.hot ? 'hot' : ''}" href="${x.href}"><span class="ib ${x.done ? 'accent' : ''}">${icon(x.icon, 18)}</span><span class="t"><span class="k">${esc(x.kind)}</span><b>${esc(x.title)}</b><span class="s">${esc(x.sub)}</span></span></a>`).join('')}</div>`
+      : `<div class="np-empty"><span class="ib lg">${icon('check', 24)}</span><p>Không có lịch nào trong 7 ngày tới.</p></div>`)
+      + `<div class="np-foot"><a href="/hanh-trinh#nhac-lich">${icon('plus', 16)} Thêm nhắc lịch</a><a href="/gia-dinh">Xem lịch gia đình ${icon('arrow', 16)}</a></div>`;
   }
 
   async function showReminders(me, header) {
