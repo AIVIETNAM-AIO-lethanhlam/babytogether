@@ -132,6 +132,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
   }
 
+  // Link mở Google Calendar với sự kiện điền sẵn (không cần đăng nhập Google vào website)
+  function gcalUrl(e) {
+    const d = String(e.date).replace(/-/g, '');
+    let dates;
+    if (e.time) {
+      const [h, m] = e.time.split(':').map(Number); const end = new Date(2000, 0, 1, h + 1, m);
+      const t = (x, y) => String(x).padStart(2, '0') + String(y).padStart(2, '0') + '00';
+      dates = `${d}T${t(h, m)}/${d}T${t(end.getHours(), end.getMinutes())}`;
+    } else { const n = new Date(e.date + 'T00:00:00'); n.setDate(n.getDate() + 1); dates = `${d}/${n.getFullYear()}${String(n.getMonth() + 1).padStart(2, '0')}${String(n.getDate()).padStart(2, '0')}`; }
+    const p = new URLSearchParams({ action: 'TEMPLATE', text: e.title, dates, ctz: 'Asia/Ho_Chi_Minh', details: (e.type === 'vaccine' ? 'Lịch tiêm chủng cho bé' : 'Lịch khám sức khỏe') + ' – nhắc từ BabyTogether ' + location.origin + '/hanh-trinh' });
+    return 'https://calendar.google.com/calendar/render?' + p;
+  }
   async function renderReminders() {
     const box = $('nhac-lich');
     const head = `<div style="display:flex;justify-content:space-between;align-items:center"><h2 class="h4">Nhắc lịch sức khỏe</h2>${me.family ? `<button class="icon-btn sm" id="add-rem" style="background:var(--sky-800);border:0;color:#fff" aria-label="Thêm lịch">${icon('plus', 18)}</button>` : ''}</div>`;
@@ -141,13 +153,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     try { items = (await api('/api/events?from=' + todayStr())).items.filter((e) => e.type === 'vaccine' || e.type === 'checkup'); } catch (_) { /* */ }
     box.innerHTML = head + (items.length ? items.slice(0, 6).map((e) => {
       const days = Math.round((new Date(e.date) - new Date(todayStr())) / 864e5);
-      return `<div class="rem-item"><span class="ib sm" style="background:var(--sky-800);color:var(--sky-300)">${icon(e.type === 'vaccine' ? 'syringe' : 'stetho', 18)}</span><div class="t"><b>${esc(e.title)}</b><span>${fmtDate(e.date)}${e.time ? ' · ' + esc(e.time) : ''}</span></div>${days <= 3 ? `<span class="tag" style="background:var(--sky-500);color:#fff">${days === 0 ? 'Hôm nay' : 'Còn ' + days + ' ngày'}</span>` : ''}</div>`;
+      return `<div class="rem-item"><span class="ib sm" style="background:var(--sky-800);color:var(--sky-300)">${icon(e.type === 'vaccine' ? 'syringe' : 'stetho', 18)}</span><div class="t"><b>${esc(e.title)}</b><span>${fmtDate(e.date)}${e.time ? ' · ' + esc(e.time) : ''}</span></div>${days <= 3 ? `<span class="tag" style="background:var(--sky-500);color:#fff">${days === 0 ? 'Hôm nay' : 'Còn ' + days + ' ngày'}</span>` : ''}
+        <div class="rem-acts"><a href="${gcalUrl(e)}" target="_blank" rel="noopener">${icon('calendar', 14)} Google Calendar</a><button type="button" data-del-ev="${e.id}">${icon('trash', 14)} Xóa</button></div></div>`;
     }).join('') : '<p style="margin:0;color:var(--sky-200)">Chưa có lịch tiêm chủng hoặc lịch khám sắp tới.</p>');
+    box.onclick = async (ev) => { const d = ev.target.closest('[data-del-ev]'); if (!d || !confirm('Xóa nhắc lịch này?')) return;
+      try { await api('/api/events/' + d.dataset.delEv, { method: 'DELETE' }); toast('Đã xóa nhắc lịch'); renderReminders(); } catch (ex) { toast(ex.message, true); } };
     $('add-rem').onclick = () => modal({ title: 'Thêm nhắc lịch', submitText: 'Thêm lịch',
       html: `<div class="form-grid"><label class="field full">Nội dung<input name="title" required maxlength="200" placeholder="VD: Tiêm vắc xin 2 tháng tuổi"></label>
         <label class="field">Ngày<input type="date" name="date" required min="${todayStr()}"></label><label class="field">Giờ<input type="time" name="time"></label>
         <label class="field full">Loại<select name="type"><option value="vaccine">Tiêm chủng</option><option value="checkup">Khám sức khỏe</option></select></label></div>`,
-      onSubmit: async (f) => { await api('/api/events', { method: 'POST', body: { title: f.title.value, date: f.date.value, time: f.time.value, type: f.type.value } }); toast('Đã thêm nhắc lịch'); renderReminders(); } });
+      onSubmit: async (f) => { await api('/api/events', { method: 'POST', body: { title: f.title.value, date: f.date.value, time: f.time.value, type: f.type.value } }); toast('Đã thêm nhắc lịch. Bấm “Google Calendar” để nhận thông báo trên điện thoại.'); renderReminders(); } });
   }
 
   function renderAll() { renderProfile(); renderTimeline(); renderStage(); }

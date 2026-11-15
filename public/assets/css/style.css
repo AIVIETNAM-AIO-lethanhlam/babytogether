@@ -176,6 +176,7 @@ button { cursor: pointer; }
 .field { display: flex; flex-direction: column; gap: 8px; font-size: 14px; font-weight: 500; color: var(--sky-900); }
 .input, .field input, .field select, .field textarea { width: 100%; min-height: 48px; padding: 12px 16px; border: 1px solid var(--sky-200); border-radius: var(--r-md); background: var(--white); font-size: 15px; font-weight: 400; color: var(--sky-950); outline: none; transition: border-color .15s, box-shadow .15s; }
 .field textarea { min-height: 110px; resize: vertical; line-height: 1.5; }
+.field select, select.input { appearance: none; -webkit-appearance: none; padding-right: 52px; cursor: pointer; background: var(--white) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23046388' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 20px center; background-size: 20px; }
 .input:focus, .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--sky-500); box-shadow: 0 0 0 4px rgba(9,183,238,.15); }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .form-grid .full { grid-column: 1 / -1; }
@@ -365,10 +366,17 @@ button { cursor: pointer; }
 .list-link .t { flex: 1; min-width: 0; }
 .list-link:hover .h4 { color: var(--sky-700); }
 .checklist label { display: flex; align-items: center; gap: 12px; padding: 12px 0; font-size: 15px; cursor: pointer; }
-.checklist input { width: 22px; height: 22px; accent-color: var(--sky-700); flex: none; margin: 0; }
-.checklist input:checked + span { color: var(--n-600); text-decoration: line-through; }
+.checklist input { appearance: none; -webkit-appearance: none; width: 24px; height: 24px; flex: none; margin: 0; border: 2px solid var(--sky-300); border-radius: 7px; background: var(--white) no-repeat center / 16px; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.checklist input:hover { border-color: var(--sky-500); }
+.checklist input:focus-visible { outline: 3px solid rgba(18,161,107,.3); outline-offset: 2px; }
+.checklist input:checked { background-color: var(--ok); border-color: var(--ok); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); }
+.checklist span { transition: color .15s; }
+.checklist input:checked + span { color: var(--ok); font-weight: 500; }
 .rem-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px; background: var(--sky-900); }
-.rem-item .t { flex: 1; min-width: 0; } .rem-item b { display: block; font-weight: 500; } .rem-item span { font-size: 13px; color: var(--sky-200); }
+.rem-item .t { flex: 1; min-width: 0; } .rem-item b { display: block; font-weight: 500; } .rem-item .t > span { font-size: 13px; color: var(--sky-200); }
+.rem-item { flex-wrap: wrap; } .rem-acts { display: flex; gap: 8px; width: 100%; padding-left: 50px; }
+.rem-acts a, .rem-acts button { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: var(--r-full); border: 1px solid rgba(255,255,255,.18); background: none; color: var(--sky-100); font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.rem-acts a:hover, .rem-acts button:hover { background: rgba(255,255,255,.1); }
 
 /* ================= QUIZ ================= */
 .seg-tabs { display: inline-flex; gap: 4px; padding: 4px; border-radius: var(--r-full); background: var(--sky-50); border: 1px solid var(--sky-100); }

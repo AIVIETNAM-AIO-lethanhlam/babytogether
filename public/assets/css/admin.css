@@ -94,6 +94,7 @@ body.admin { background: var(--n-50); padding-bottom: 0; }
 .add-block:hover { background: var(--sky-50); color: var(--sky-700); }
 .settings { background: var(--white); border: 1px solid var(--sky-100); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 172px; max-height: calc(100vh - 190px); overflow: auto; }
 .settings .field input, .settings .field select { min-height: 44px; padding: 10px 14px; font-size: 14px; }
+.settings .field select { padding-right: 44px; background-position: right 14px center; background-size: 18px; }
 .switch { position: relative; width: 44px; height: 26px; flex: none; } .switch input { opacity: 0; width: 0; height: 0; }
 .switch span { position: absolute; inset: 0; border-radius: 13px; background: var(--n-200); transition: .15s; cursor: pointer; }
 .switch span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--white); transition: .15s; }
