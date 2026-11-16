@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (child.birth_date) { const m = (Date.now() - new Date(child.birth_date)) / (30.44 * 864e5); childStage = m < 6 ? '0-6' : m < 12 ? '6-12' : '12-24'; }
     else childStage = 'pregnancy';
   }
-  const state = { q: ps.get('q') || '', category: ps.get('category') || '', age: ps.get('age') || '', sources: [], bookmarked: ps.get('saved') === '1', sort: ps.get('sort') || 'recommended', offset: 0 };
+  const state = { q: ps.get('q') || '', category: ps.get('category') || '', age: ps.get('age') || '', sources: (ps.get('source') || '').split(',').filter((x) => ['WHO', 'UNICEF', 'Bộ Y tế'].includes(x)), bookmarked: ps.get('saved') === '1', sort: ps.get('sort') || 'recommended', offset: 0 };
   const PAGE = 9;
   $('q').value = state.q; $('sort').value = state.sort;
   const stats = await api('/api/stats').catch(() => ({ categories: {}, articles: 0 }));
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function query(extra) {
     const p = new URLSearchParams();
     if (state.q) p.set('q', state.q); if (state.category) p.set('category', state.category); if (state.age) p.set('age', state.age);
-    if (state.sources.length) p.set('source', state.sources.join(',')); if (state.bookmarked) p.set('bookmarked', '1'); p.set('sort', state.sort);
+    if (state.sources.length) p.set('source', state.sources.join(',')); if (state.bookmarked) p.set('bookmarked', '1'); if (state.partial) p.set('partial', '1'); p.set('sort', state.sort);
     Object.entries(extra || {}).forEach(([k, v]) => p.set(k, v)); return p.toString();
   }
 
@@ -95,32 +95,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     return a.id;
   }
 
+  let listSeq = 0;
   async function loadList(append) {
     const list = $('list');
     if (!append) list.innerHTML = '<div class="loading" style="grid-column:1/-1">Đang tải…</div>';
+    const my = ++listSeq;
     try {
       const r = await api('/api/articles?' + query({ limit: PAGE, offset: state.offset }));
+      if (my !== listSeq) return; // kết quả cũ (người dùng đã gõ tiếp)
       const items = r.items.filter((a) => a.id !== featuredId);
       const html = items.map((a) => articleCard(a)).join('');
       if (append) list.insertAdjacentHTML('beforeend', html);
-      else list.innerHTML = html || `<div class="empty" style="grid-column:1/-1">${state.bookmarked ? 'Bạn chưa lưu bài viết nào.' : 'Không tìm thấy bài viết phù hợp. Thử từ khóa khác nhé!'}</div>`;
+      else list.innerHTML = html || (featuredId && r.total ? '' : `<div class="empty" style="grid-column:1/-1">${state.bookmarked ? 'Bạn chưa lưu bài viết nào.' : `Không tìm thấy bài viết phù hợp.${state.q ? ' Thử từ khóa ngắn hơn, gõ không dấu hoặc bỏ bớt bộ lọc nhé!' : ' Thử bỏ bớt bộ lọc nhé!'}`}${state.q || state.category || state.age || state.sources.length || state.bookmarked ? '<br><button class="btn btn-ghost btn-sm" id="clear-all" style="margin-top:12px">Xóa tìm kiếm & bộ lọc</button>' : ''}</div>`);
+      const ca = $('clear-all'); if (ca) ca.onclick = () => { Object.assign(state, { q: '', category: '', age: '', sources: [], bookmarked: false }); $('q').value = ''; reload(true); };
       $('more').hidden = !r.hasMore;
       $('count').textContent = `${r.total} bài viết`;
-      $('count-sub').textContent = [state.q ? `cho “${state.q}”` : '', state.category ? CATEGORIES[state.category] : '', state.age ? AGES[state.age] : ''].filter(Boolean).join(' · ');
+      $('count-sub').textContent = [state.q ? `cho “${state.q}”` : '', state.category ? CATEGORIES[state.category] : '', state.age ? AGES[state.age] : '', state.sources.length ? 'Nguồn: ' + state.sources.join(', ') : '', state.bookmarked ? 'Bài đã lưu' : ''].filter(Boolean).join(' - ');
     } catch (e) { list.innerHTML = `<div class="empty" style="grid-column:1/-1">${esc(e.message)}</div>`; }
   }
 
   async function reload(withPaths) {
     state.offset = 0;
     renderCats();
-    const p = new URLSearchParams(); if (state.q) p.set('q', state.q); if (state.category) p.set('category', state.category); if (state.age) p.set('age', state.age); if (state.sort !== 'recommended') p.set('sort', state.sort);
+    const p = new URLSearchParams(); if (state.q) p.set('q', state.q); if (state.category) p.set('category', state.category); if (state.age) p.set('age', state.age); if (state.sources.length) p.set('source', state.sources.join(',')); if (state.bookmarked) p.set('saved', '1'); if (state.sort !== 'recommended') p.set('sort', state.sort);
     history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p : ''));
     if (withPaths) renderPaths();
     renderSide();
     featuredId = await loadFeatured().catch(() => null);
     await loadList(false);
   }
-  $('search-form').addEventListener('submit', (e) => { e.preventDefault(); state.q = $('q').value.trim(); reload(); });
+  $('search-form').addEventListener('submit', (e) => { e.preventDefault(); clearTimeout(liveT); state.q = $('q').value.trim(); state.partial = false; reload(); });
+  // Lọc ngay khi đang gõ (từ cuối được khớp theo tiền tố)
+  let liveT;
+  $('q').addEventListener('input', () => { clearTimeout(liveT); liveT = setTimeout(() => { const v = $('q').value; state.q = v.trim(); state.partial = !!v.trim() && !/\s$/.test(v); reload(); }, 300); });
   $('sort').addEventListener('change', () => { state.sort = $('sort').value; reload(); });
   $('more').addEventListener('click', () => { state.offset += PAGE; loadList(true); });
   reload(true);

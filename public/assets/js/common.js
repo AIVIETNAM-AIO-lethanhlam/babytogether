@@ -206,11 +206,17 @@
         if (pop) { pop.remove(); return; }
         pop = document.createElement('form'); pop.className = 'search-pop'; pop.setAttribute('role', 'search');
         pop.innerHTML = `<div class="search-bar" style="box-shadow:none;border:0">${icon('search', 20)}<input name="q" placeholder="Ba mẹ đang thắc mắc điều gì?" aria-label="Tìm kiếm"><button class="btn btn-sm">Tìm</button></div>`;
-        header.appendChild(pop); pop.q.focus();
-        pop.addEventListener('submit', (e) => { e.preventDefault(); location.href = '/kien-thuc?q=' + encodeURIComponent(pop.q.value.trim()); });
+        header.appendChild(pop); attachSuggest(pop, true);
+        if (location.pathname === '/kien-thuc') pop.q.value = new URLSearchParams(location.search).get('q') || '';
+        pop.q.focus();
+        pop.addEventListener('submit', (e) => { e.preventDefault(); const v = pop.q.value.trim(); if (!v) { pop.q.focus(); return; } location.href = '/kien-thuc?q=' + encodeURIComponent(v); });
+        pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') pop.remove(); });
       });
       header.querySelector('#hdr-bell').addEventListener('click', (e) => { e.stopPropagation(); toggleNotif(header); });
-      document.addEventListener('click', (e) => { if (!e.target.closest('.notif-pop') && !e.target.closest('#hdr-bell')) header.querySelectorAll('.notif-pop').forEach((p) => p.remove()); });
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.notif-pop') && !e.target.closest('#hdr-bell')) header.querySelectorAll('.notif-pop').forEach((p) => p.remove());
+        if (!e.target.closest('.search-pop') && !e.target.closest('#hdr-search')) header.querySelectorAll('.search-pop').forEach((p) => p.remove());
+      });
       getMe().then((me) => {
         const a = document.getElementById('hdr-avatar');
         if (me.user) {
@@ -350,6 +356,63 @@
     });
   }
 
-  window.BT = { api, getMe, esc, icon, fmtDate, todayStr, readMins, cover, articleCard, stepLabel, toast, modal, compressImage, loginHint, localRead, logoHtml, missionCard, completeMission, CATEGORIES, CAT_SHORT, CAT_ICON, AGES };
+  // ---------- Gợi ý tìm kiếm khi đang gõ ----------
+  const lowV = (x) => String(x || '').normalize('NFC').toLowerCase();
+  const stripV = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  function highlight(text, q) {
+    const toks = lowV(q).split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+    if (!toks.length) return esc(text);
+    let prevHit = false;
+    const last = toks.length - 1, typing = !/\s$/.test(q);
+    return String(text).split(/(\s+)/).map((w) => {
+      if (/^\s+$/.test(w)) return w;
+      const lw = lowV(w).replace(/[^\p{L}\p{N}]/gu, ''), sw = stripV(lw);
+      let exactPrev = false;
+      const hit = !!lw && toks.some((t, i) => { const word = stripV(t) === t ? sw : lw;
+        if (word === t) { if (i < last) exactPrev = true; return true; }
+        // từ cuối đang gõ dở: khớp tiền tố (≥2 chữ, hoặc 1 chữ nếu đứng ngay sau từ vừa khớp, VD "ăn d" → "ăn dặm")
+        return i === last && typing && word.startsWith(t) && (t.length >= 2 || (prevHit && last > 0)); });
+      prevHit = exactPrev;
+      return hit ? `<mark>${esc(w)}</mark>` : esc(w);
+    }).join('');
+  }
+  // form: <form> chứa input[name=q]; inline = true khi hiển thị ngay trong form (khung tìm kiếm trên menu)
+  function attachSuggest(form, inline) {
+    const input = form.querySelector('input[name=q]'); if (!input || form.dataset.suggest) return;
+    form.dataset.suggest = '1'; input.setAttribute('autocomplete', 'off');
+    input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list'); input.setAttribute('aria-expanded', 'false');
+    const box = document.createElement('div'); box.className = 'suggest-box' + (inline ? ' inline' : ''); box.setAttribute('role', 'listbox'); box.hidden = true;
+    if (!inline) form.style.position = 'relative';
+    form.appendChild(box);
+    let timer, seq = 0, active = -1;
+    const close = () => { box.hidden = true; active = -1; input.setAttribute('aria-expanded', 'false'); };
+    const items = () => [...box.querySelectorAll('a')];
+    const setActive = (i) => { const it = items(); if (!it.length) return; active = (i + it.length) % it.length; it.forEach((a, k) => a.classList.toggle('on', k === active)); it[active].scrollIntoView({ block: 'nearest' }); };
+    async function run() {
+      const q = input.value; const my = ++seq;
+      if (!q.trim()) { close(); return; }
+      let r; try { r = await api('/api/search/suggest?q=' + encodeURIComponent(q)); } catch (_) { return; }
+      if (my !== seq) return; // đã có lần gõ mới hơn
+      const all = '/kien-thuc?q=' + encodeURIComponent(q.trim());
+      box.innerHTML = (r.articles.length ? `<span class="sg-label">Bài viết</span>` + r.articles.map((a) => `<a href="/bai-viet/${encodeURIComponent(a.slug)}" role="option"><span class="ib sm">${icon(CAT_ICON[a.category] || 'book', 16)}</span><span class="t"><b>${highlight(a.title, q)}</b><span>${esc(CAT_SHORT[a.category] || '')}${a.step ? ' - ' + stepLabel(a.step) : ''}</span></span></a>`).join('') : '')
+        + (r.paths.length ? `<span class="sg-label">Lộ trình đọc</span>` + r.paths.map((p) => `<a href="/bai-viet/${encodeURIComponent(p.first_slug)}" role="option"><span class="ib sm">${icon('route', 16)}</span><span class="t"><b>${highlight(p.title, q)}</b><span>${p.total} bài - bắt đầu từ bước 1</span></span></a>`).join('') : '')
+        + (r.total ? `<a class="sg-all" href="${all}" role="option">${icon('search', 16)} Xem tất cả ${r.total} kết quả cho “${esc(q.trim())}” ${icon('arrow', 16)}</a>`
+          : `<div class="sg-empty">Chưa có bài viết khớp “${esc(q.trim())}”. Thử gõ không dấu hoặc từ khóa ngắn hơn.</div>`);
+      box.hidden = false; active = -1; input.setAttribute('aria-expanded', 'true');
+    }
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 160); });
+    input.addEventListener('focus', () => { if (input.value.trim() && box.innerHTML) { box.hidden = false; } });
+    input.addEventListener('keydown', (e) => {
+      if (box.hidden) return;
+      if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+      else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); location.href = items()[active].href; }
+      else if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    });
+    document.addEventListener('click', (e) => { if (!form.contains(e.target)) close(); });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('form[data-suggest-auto]').forEach((f) => attachSuggest(f)));
+  window.BT = { attachSuggest, highlight, api, getMe, esc, icon, fmtDate, todayStr, readMins, cover, articleCard, stepLabel, toast, modal, compressImage, loginHint, localRead, logoHtml, missionCard, completeMission, CATEGORIES, CAT_SHORT, CAT_ICON, AGES };
   document.addEventListener('DOMContentLoaded', renderChrome);
 })();

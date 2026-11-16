@@ -13,7 +13,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     <form class="adm-search" id="top-search" role="search">${icon('search', 18)}<input name="q" placeholder="Tìm bài viết theo tiêu đề…" aria-label="Tìm bài viết"></form>
     <div class="r"><a class="btn btn-ghost btn-sm" href="/" target="_blank" rel="noopener">${icon('eye', 16)} Xem trang người dùng</a>
       <div class="adm-me"><span class="avatar">${esc(me.user.name.charAt(0).toUpperCase())}</span><div><b>${esc(me.user.name)}</b><span>${esc(me.user.email)}</span></div></div></div>`;
-  document.getElementById('top-search').onsubmit = (e) => { e.preventDefault(); location.hash = '#articles?q=' + encodeURIComponent(e.target.q.value.trim()); };
+  document.getElementById('top-search').onsubmit = (e) => {
+    e.preventDefault(); const v = e.target.q.value.trim(); const h = '#articles' + (v ? '?q=' + encodeURIComponent(v) : '');
+    listState.page = 1;
+    if (location.hash === h) { listState.q = v; viewArticles(new URLSearchParams()); } else location.hash = h;
+  };
   const NAV = [['articles', 'list', 'Quản lý bài viết'], ['editor', 'pen', 'Viết bài mới'], ['quizzes', 'quiz', 'Quiz & game'], ['paths', 'route', 'Lộ trình đọc'], ['missions', 'target', 'Nhiệm vụ'], ['users', 'users', 'Người dùng']];
   document.getElementById('adm-side').innerHTML = `<span class="label">Quản trị</span>${NAV.map(([k, i, l]) => `<a href="#${k}" data-nav="${k}">${icon(i, 18)} ${l}</a>`).join('')}
     <span class="label" style="margin-top:16px">Xem như người dùng</span>
@@ -34,7 +38,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // =====================================================================
   const listState = { q: '', days: '', category: '', status: '', path: '', has_quiz: '', page: 1, edit: sessionStorage.getItem('bt_adm_edit') === '1' };
   async function viewArticles(params) {
-    if (params.get('q') != null) listState.q = params.get('q');
+    if (params.get('q') != null) { listState.q = params.get('q'); listState.page = 1; }
+    const syncHash = () => { const h = '#articles' + (listState.q ? '?q=' + encodeURIComponent(listState.q) : ''); if (location.hash !== h) { history.replaceState(null, '', h); lastHash = h; } };
+    syncHash();
     const paths = await getPaths();
     main.innerHTML = `<div class="adm-head"><div><h1>Quản lý bài viết</h1><p class="muted" style="margin:4px 0 0" id="sub"></p></div>
       <div class="chips"><button class="btn btn-ghost edit-toggle ${listState.edit ? 'on' : ''}" id="toggle-edit">${icon('pen', 16)} ${listState.edit ? 'Đang chỉnh sửa' : 'Chỉnh sửa'}${listState.edit ? ' ' + icon('x', 14) : ''}</button><a class="btn" href="#editor">${icon('plus', 18)} Viết bài mới</a></div></div>
@@ -50,7 +56,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="table" id="table"><div class="loading">Đang tải…</div></div>
       ${listState.edit ? `<div class="msg info" style="display:flex;gap:8px;align-items:center">${icon('pen', 16)} Chế độ chỉnh sửa đang bật: mỗi bài hiện nút Sửa / Xóa. Bấm “Sửa” để mở lại trang viết bài với nút “Cập nhật”. Bản nháp không hiển thị với người dùng.</div>` : ''}`;
     ['days', 'category', 'status', 'path'].forEach((k) => { const el = document.getElementById('f-' + k); el.value = listState[k]; el.classList.toggle('on', !!listState[k]); el.onchange = () => { listState[k] = el.value; listState.page = 1; viewArticles(new URLSearchParams()); }; });
-    let t; document.getElementById('f-q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { listState.q = e.target.value.trim(); listState.page = 1; load(); }, 300); };
+    let t; document.getElementById('f-q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { listState.q = e.target.value.trim(); listState.page = 1; syncHash(); load(); }, 300); };
     document.getElementById('toggle-edit').onclick = () => { listState.edit = !listState.edit; sessionStorage.setItem('bt_adm_edit', listState.edit ? '1' : ''); viewArticles(new URLSearchParams()); };
     async function load() {
       const p = new URLSearchParams(); ['q', 'days', 'category', 'status', 'path', 'has_quiz'].forEach((k) => { if (listState[k]) p.set(k, listState[k]); });
@@ -58,7 +64,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const c = r.counts;
       document.getElementById('sub').textContent = `${c.total} bài viết · ${c.published || 0} đã đăng · ${c.drafts || 0} bản nháp`;
       document.getElementById('tiles').innerHTML = [[c.total, 'Tất cả bài viết', 'var(--sky-700)'], [c.published || 0, 'Đã đăng', 'var(--ok)'], [c.drafts || 0, 'Bản nháp', 'var(--warn)'], [c.with_quiz || 0, 'Bài có quiz', 'var(--sky-500)']].map(([n, l, col]) => `<div class="tile"><b style="color:${col}">${n}</b><span>${l}</span></div>`).join('');
-      const tabs = [['', '', 'Tất cả · ' + c.total], ['published', '', 'Đã đăng · ' + (c.published || 0)], ['draft', '', 'Bản nháp · ' + (c.drafts || 0)], ['', '1', 'Có quiz · ' + (c.with_quiz || 0)]];
+      const cnt = (n) => ` <span class="count">${n}</span>`;
+      const tabs = [['', '', 'Tất cả' + cnt(c.total)], ['published', '', 'Đã đăng' + cnt(c.published || 0)], ['draft', '', 'Bản nháp' + cnt(c.drafts || 0)], ['', '1', 'Có quiz' + cnt(c.with_quiz || 0)]];
       document.getElementById('tabs').innerHTML = tabs.map(([s, q, l]) => `<button class="chip ${listState.status === s && listState.has_quiz === q ? 'active' : ''}" data-s="${s}" data-q="${q}">${l}</button>`).join('');
       document.getElementById('tabs').onclick = (e) => { const b = e.target.closest('[data-s]'); if (!b) return; listState.status = b.dataset.s; listState.has_quiz = b.dataset.q; listState.page = 1; viewArticles(new URLSearchParams()); };
       const PER = 10, pages = Math.max(1, Math.ceil(r.items.length / PER)); listState.page = Math.min(listState.page, pages);
@@ -69,9 +76,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <td><div class="row-actions">${listState.edit ? `<a class="mini-btn" href="#editor/${a.id}">${icon('pen', 14)} Sửa</a><button class="mini-btn del" data-del="${a.id}" data-title="${esc(a.title)}">${icon('trash', 14)} Xóa</button>` : ''}
             <a class="mini-btn icon" href="/bai-viet/${encodeURIComponent(a.slug)}" target="_blank" rel="noopener" title="Xem">${icon('eye', 16)}</a></div></td></tr>`).join('') || '<tr><td colspan="6"><div class="empty" style="border:0">Không có bài viết phù hợp.</div></td></tr>'}
         </tbody></table><div class="pager"><span>Hiển thị ${r.items.length ? (listState.page - 1) * PER + 1 : 0}–${(listState.page - 1) * PER + rows.length} trong ${r.items.length} bài viết</span>
-        <div class="chips">${[...Array(pages)].map((_, i) => `<button class="${i + 1 === listState.page ? 'on' : ''}" data-page="${i + 1}">${i + 1}</button>`).join('')}</div></div>`;
+        <div class="chips">${[...Array(pages)].map((_, i) => `<button class="${i + 1 === listState.page ? 'on' : ''}" data-pg="${i + 1}">${i + 1}</button>`).join('')}</div></div>`;
       document.getElementById('table').onclick = (e) => {
-        const pg = e.target.closest('[data-page]'); if (pg) { listState.page = Number(pg.dataset.page); load(); return; }
+        const pg = e.target.closest('[data-pg]'); if (pg) { listState.page = Number(pg.dataset.pg); load(); return; }
         const d = e.target.closest('[data-del]'); if (!d) return;
         modal({ title: 'Xóa bài viết này?', submitText: 'Xóa bài viết', danger: true,
           html: `<span class="ib lg" style="background:var(--danger-bg);color:var(--danger)">${icon('trash', 26)}</span><p class="muted" style="margin:0">“${esc(d.dataset.title)}” và quiz đi kèm (nếu có) sẽ bị xóa vĩnh viễn. Không thể hoàn tác.</p>`,
@@ -329,7 +336,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function currentBlock() { const s = getSelection(); if (!s.rangeCount) return null; let n = s.anchorNode; while (n && n !== rte && !(n.nodeType === 1 && /^(P|H2|H3|DIV|LI|BLOCKQUOTE)$/.test(n.tagName))) n = n.parentNode; return n === rte ? null : n; }
     rte.addEventListener('input', () => {
       const blk = currentBlock(); const txt = blk ? blk.textContent : (rte.textContent.length < 25 ? rte.textContent : '');
-      if (/^\/[^\s/]{0,18}$/.test(txt)) {
+      if (/^\/(?!\s)[^/]{0,24}$/.test(txt)) {
         if (!blk) { document.execCommand('formatBlock', false, '<P>'); }
         slashBlock = currentBlock();
         const s = getSelection(); const rect = s.rangeCount ? s.getRangeAt(0).getBoundingClientRect() : rte.getBoundingClientRect();

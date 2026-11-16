@@ -372,6 +372,43 @@ route('GET', '/api/history', { auth: true }, async (ctx) => {
 // ---------- Bài viết ----------
 const CATEGORIES = ['baby-care', 'maternal-care', 'nutrition', 'vaccination'];
 const AGES = ['pregnancy', '0-6', '6-12', '12-24', 'all'];
+
+// ---------- Tìm kiếm tiếng Việt ----------
+// Không phân biệt hoa/thường; gõ có dấu thì so khớp đúng dấu ("rốn" ≠ "rộng"), gõ không dấu thì bỏ qua dấu ("ron" = "rốn").
+const lowVi = (x) => String(x || '').normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const stripVi = (x) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+const STOP_VI = new Set('la va cua cho co khi thi bao nhieu gi nao the nhu de duoc nhung mot cac ve o tai sao lam bi nen can voi tu den hay hoac khong'.split(' '));
+const htmlText = (h) => String(h || '').replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&[a-z]+;/g, ' ');
+// Trả về điểm liên quan (0 = không khớp). fields: [[văn bản, trọng số], ...]
+// partial = true khi người dùng đang gõ dở: từ cuối cùng được khớp theo tiền tố (gõ "r" → "rốn", "rửa"…)
+function searchScore(query, fields, partial = false) {
+  const ql = lowVi(query); if (!ql) return 1;
+  const toks = ql.split(' ').map((t) => ({ t, plain: stripVi(t) === t, pre: false }));
+  if (partial && !/\s$/.test(String(query))) toks[toks.length - 1].pre = true;
+  let need = toks.filter((x) => x.pre || (!STOP_VI.has(stripVi(x.t)) && x.t.length > 1));
+  if (need.length > 1 && need[need.length - 1].pre && STOP_VI.has(stripVi(need[need.length - 1].t))) need = need.slice(0, -1);
+  if (!need.length) need = toks;
+  const docs = fields.map(([text, w]) => { const l = lowVi(text); const st = stripVi(l); return { l: ' ' + l + ' ', st: ' ' + st + ' ', words: l.split(' '), swords: st.split(' '), w }; });
+  let score = 0, hit = 0;
+  for (const { t, plain, pre } of need) {
+    let best = 0;
+    for (const d of docs) {
+      const words = plain ? d.swords : d.words;
+      if (words.includes(t)) best = Math.max(best, d.w * 2);
+      else if ((pre || t.length >= 4) && words.some((w) => w.startsWith(t))) best = Math.max(best, d.w * (pre ? 1.5 : 1));
+    }
+    if (best) { hit++; score += best; }
+  }
+  const required = need.length <= 2 ? need.length : Math.ceil(need.length * 0.6);
+  if (hit < required) return 0;
+  const plainQ = stripVi(ql) === ql;
+  for (const d of docs) {
+    const hay = plainQ ? d.st : d.l;
+    if (ql.length > 2 && hay.includes(' ' + ql + ' ')) score += d.w * 6; // khớp nguyên cụm
+    else if (partial && ql.length > 1 && hay.includes(' ' + ql)) score += d.w * 4; // cụm đang gõ dở
+  }
+  return score;
+}
 const LIST_COLS = 'a.id,a.slug,a.title,a.summary,a.category,a.age_group,a.cover_image,a.source_name,a.reviewer,a.featured,a.views,a.updated_at,a.created_at';
 
 // Bản đồ: bài viết -> lộ trình đầu tiên chứa nó (để hiện nhãn "Bước 2 · Tuần đầu đời")
@@ -399,10 +436,7 @@ route('GET', '/api/stats', async () => {
 route('GET', '/api/articles', async (ctx) => {
   const q = ctx.query;
   const where = ["a.status='published'"], params = [];
-  if (q.q) {
-    where.push('(a.title LIKE ? OR a.summary LIKE ? OR a.content LIKE ?)');
-    const like = `%${str(q.q, 100)}%`; params.push(like, like, like);
-  }
+  const term = str(q.q, 100);
   if (CATEGORIES.includes(q.category)) { where.push('a.category=?'); params.push(q.category); }
   if (AGES.includes(q.age) && q.age !== 'all') { where.push("(a.age_group=? OR a.age_group='all')"); params.push(q.age); }
   if (q.featured === '1') where.push('a.featured=1');
@@ -414,7 +448,7 @@ route('GET', '/api/articles', async (ctx) => {
   const offset = Math.max(Number(q.offset) || 0, 0);
   const uid = ctx.user ? ctx.user.id : 0;
   if (q.bookmarked === '1' && uid) where.push('b.user_id IS NOT NULL');
-  const rows = await db.all(`SELECT ${LIST_COLS},
+  let rows = await db.all(`SELECT ${LIST_COLS},${term ? ' a.content,' : ''}
       CASE WHEN b.user_id IS NULL THEN 0 ELSE 1 END AS bookmarked,
       CASE WHEN r.user_id IS NULL THEN 0 ELSE 1 END AS is_read
     FROM articles a
@@ -422,10 +456,14 @@ route('GET', '/api/articles', async (ctx) => {
     LEFT JOIN article_reads r ON r.article_id=a.id AND r.user_id=?
     WHERE ${where.join(' AND ')}
     ORDER BY a.updated_at DESC LIMIT 500`, [uid, uid, ...params]);
+  if (term) {
+    rows = rows.map((r) => { r._score = searchScore(term, [[r.title, 5], [r.summary, 3], [r.source_name, 2], [htmlText(r.content), 1]], q.partial === '1'); delete r.content; return r; }).filter((r) => r._score > 0);
+  }
   const map = await pathMap();
   for (const r of rows) r.step = stepOf(map, r.id);
   const sort = q.sort || 'recommended';
-  if (sort === 'recommended') {
+  if (term && sort === 'recommended') rows.sort((x, y) => y._score - x._score); // đang tìm: xếp theo độ liên quan
+  else if (sort === 'recommended') {
     rows.sort((x, y) => {
       const a = map.get(x.id), b = map.get(y.id);
       if (a && b) return a.sort_order - b.sort_order || a.position - b.position;
@@ -434,6 +472,21 @@ route('GET', '/api/articles', async (ctx) => {
     });
   } else if (sort === 'popular') rows.sort((x, y) => y.views - x.views);
   return { items: rows.slice(offset, offset + limit), total: rows.length, hasMore: rows.length > offset + limit };
+});
+
+// Gợi ý khi đang gõ (ô tìm kiếm trên menu & trang chủ)
+route('GET', '/api/search/suggest', async (ctx) => {
+  const term = str(ctx.query.q, 100);
+  if (!lowVi(term)) return { articles: [], paths: [], total: 0 };
+  const rows = await db.all(`SELECT a.id,a.slug,a.title,a.summary,a.category,a.content FROM articles a WHERE a.status='published' LIMIT 500`);
+  const scored = rows.map((r) => ({ id: r.id, slug: r.slug, title: r.title, summary: r.summary, category: r.category,
+    score: searchScore(term, [[r.title, 5], [r.summary, 3], [htmlText(r.content), 1]], true) })).filter((r) => r.score > 0).sort((a, b) => b.score - a.score);
+  const paths = (await db.all(`SELECT p.id,p.title,p.description,p.age_group,(SELECT COUNT(*) FROM path_items i JOIN articles a ON a.id=i.article_id WHERE i.path_id=p.id AND a.status='published') AS total,
+      (SELECT a.slug FROM path_items i JOIN articles a ON a.id=i.article_id WHERE i.path_id=p.id AND a.status='published' ORDER BY i.position LIMIT 1) AS first_slug FROM paths p ORDER BY p.sort_order`))
+    .map((p) => ({ ...p, score: searchScore(term, [[p.title, 5], [p.description, 2]], true) })).filter((p) => p.score > 0 && p.first_slug).sort((a, b) => b.score - a.score).slice(0, 2);
+  const map = await pathMap();
+  const articles = scored.slice(0, 6).map((r) => ({ ...r, step: stepOf(map, r.id) }));
+  return { articles, paths, total: scored.length };
 });
 
 route('GET', '/api/articles/:slug', async (ctx) => {
@@ -498,7 +551,7 @@ route('POST', '/api/reading/sync', { auth: true }, async (ctx) => {
 });
 
 route('GET', '/api/reading', { auth: true }, async (ctx) => {
-  const items = await db.all(`SELECT a.id,a.slug,a.title,a.category,r.read_at FROM article_reads r JOIN articles a ON a.id=r.article_id
+  let items = await db.all(`SELECT a.id,a.slug,a.title,a.summary,a.category,r.read_at FROM article_reads r JOIN articles a ON a.id=r.article_id
     WHERE r.user_id=? ORDER BY r.read_at DESC LIMIT 200`, [ctx.user.id]);
   const total = await db.get("SELECT COUNT(*) AS n FROM articles WHERE status='published'");
   const saved = await db.get('SELECT COUNT(*) AS n FROM bookmarks WHERE user_id=?', [ctx.user.id]);
@@ -824,19 +877,20 @@ route('GET', '/api/admin/stats', { admin: true }, async () => {
 
 route('GET', '/api/admin/articles', { admin: true }, async (ctx) => {
   const q = ctx.query; const where = [], params = [];
-  if (q.q) { where.push('a.title LIKE ?'); params.push(`%${str(q.q, 100)}%`); }
+  const term = str(q.q, 100);
   if (CATEGORIES.includes(q.category)) { where.push('a.category=?'); params.push(q.category); }
   if (['draft', 'published'].includes(q.status)) { where.push('a.status=?'); params.push(q.status); }
   if (Number(q.days) > 0) { where.push("a.updated_at >= datetime('now', ?)"); params.push(`-${Number(q.days)} days`); }
   if (q.path === 'none') where.push('NOT EXISTS (SELECT 1 FROM path_items pi WHERE pi.article_id=a.id)');
   else if (Number(q.path)) { where.push('EXISTS (SELECT 1 FROM path_items pi WHERE pi.article_id=a.id AND pi.path_id=?)'); params.push(Number(q.path)); }
   if (q.has_quiz === '1') where.push('EXISTS (SELECT 1 FROM quizzes z WHERE z.article_id=a.id)');
-  const items = await db.all(`SELECT a.id,a.slug,a.title,a.category,a.age_group,a.status,a.featured,a.views,a.cover_image,a.updated_at,
+  let items = await db.all(`SELECT a.id,a.slug,a.title,a.summary,a.category,a.age_group,a.status,a.featured,a.views,a.cover_image,a.updated_at,
       (SELECT COUNT(*) FROM quiz_questions x JOIN quizzes z ON z.id=x.quiz_id WHERE z.article_id=a.id) AS quiz_questions,
       (SELECT z.id FROM quizzes z WHERE z.article_id=a.id ORDER BY z.id DESC LIMIT 1) AS quiz_id
     FROM articles a ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY a.updated_at DESC LIMIT 500`, params);
+  if (term) items = items.filter((i) => searchScore(term, [[i.title, 5], [i.summary, 2], [i.slug.replace(/-/g, ' '), 1]]) > 0);
   const map = await pathMap();
-  for (const i of items) { i.step = stepOf(map, i.id); i.cover_image = i.cover_image && i.cover_image.startsWith('data:') ? 'data' : i.cover_image; }
+  for (const i of items) { delete i.summary; i.step = stepOf(map, i.id); i.cover_image = i.cover_image && i.cover_image.startsWith('data:') ? 'data' : i.cover_image; }
   const counts = await db.get(`SELECT COUNT(*) AS total, SUM(status='published') AS published, SUM(status='draft') AS drafts,
     SUM(EXISTS (SELECT 1 FROM quizzes z WHERE z.article_id=articles.id)) AS with_quiz FROM articles`);
   return { items, counts };
