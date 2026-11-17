@@ -1,6 +1,7 @@
 // Dữ liệu mẫu ban đầu (chỉ chèn khi bảng còn trống).
 // Nội dung bài viết mẫu, tổng hợp từ khuyến nghị chung của WHO/UNICEF/Bộ Y tế.
 'use strict';
+const { ensureExtraContent } = require('./content-extra');
 
 const REVIEW = 'Ban biên tập BabyTogether';
 
@@ -351,6 +352,8 @@ async function seed(db) {
     await db.run('UPDATE quiz_questions SET quiz_id=? WHERE quiz_id IS NULL', [r.lastId]);
     console.log('[seed] Đã gom câu hỏi cũ vào game chung');
   }
+  // Bài viết bổ sung cho từng giai đoạn (tự thêm cả với cơ sở dữ liệu đã có)
+  await ensureExtraContent(db);
 }
 
 module.exports = { seed };
